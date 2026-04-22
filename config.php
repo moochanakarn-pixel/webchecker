@@ -127,8 +127,8 @@ function getDbConfig()
         'host' => localSetting($local, 'db_host', '127.0.0.1'),
         'port' => localSetting($local, 'db_port', 3307),
         'name' => localSetting($local, 'db_name', 'ini76'),
-        'user' => 'root',
-        'pass' => base64_decode('cG9zcHduZXQ='),
+        'user' => localSetting($local, 'db_user', 'root'),
+        'pass' => localSetting($local, 'db_pass', ''),
     );
 
     $dbConfig = normalizeDbConfig($inlineConfig);
