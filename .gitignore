@@ -1,0 +1,9 @@
+# ไฟล์ config เฉพาะเครื่อง (มีข้อมูล DB)
+settings.local.php
+
+# ไฟล์ backup
+Backup Program/
+
+# ไฟล์ระบบ
+.DS_Store
+Thumbs.db
