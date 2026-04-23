@@ -1,3 +1,4 @@
+<?php require_once __DIR__ . '/config.php'; require_once __DIR__ . '/auth_check.php'; ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -288,7 +289,7 @@ async function loadData() {
   clearTimeout(timer);
 
   try {
-    const res  = await fetch(`${API}?action=list_pending`);
+    const res  = await fetch(`${API}?action=list_pending`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
     const json = await res.json();
 
     if (!json.success) throw new Error(json.message || 'API error');
@@ -474,7 +475,7 @@ async function tapItem(key) {
     fd.append('SubProcessID',   r.SubProcessID);
     fd.append('PrinterID',      r.PrinterID);
     fd.append('StaffID',        STAFF_ID);
-    const res  = await fetch(API, { method: 'POST', body: fd });
+    const res  = await fetch(API, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
     const json = await res.json();
     if (!json.success) throw new Error(json.message);
   } catch (e) {
@@ -501,7 +502,7 @@ async function tapServeAll(tableId) {
     fd.append('action',  'serve_table');
     fd.append('TableID', tableId);
     fd.append('StaffID', STAFF_ID);
-    const res  = await fetch(API, { method: 'POST', body: fd });
+    const res  = await fetch(API, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
     const json = await res.json();
     if (!json.success) throw new Error(json.message);
   } catch (e) {
