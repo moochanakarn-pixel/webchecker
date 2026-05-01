@@ -3,6 +3,8 @@
 ob_start();
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
 // session ก่อน require เสมอ
 if (session_status() === PHP_SESSION_NONE) {
@@ -465,34 +467,42 @@ try {
 
     if ($method === 'GET' && $action === 'get_system_settings') {
         handleGetSystemSettings();
+        exit;
     }
 
     if ($method === 'GET' && $action === 'lookup_staff_name') {
         handleLookupStaffName();
+        exit;
     }
 
     if ($method === 'GET' && $action === 'lookup_staff_by_code') {
         handleLookupStaffByCode();
+        exit;
     }
 
     if ($method === 'GET' && $action === 'list_shops') {
         handleListShops();
+        exit;
     }
 
     if ($method === 'GET' && $action === 'list_zones') {
         handleListZones();
+        exit;
     }
 
     if ($method === 'GET' && $action === 'list_tables_in_zone') {
         handleListTablesInZone();
+        exit;
     }
 
     if ($method === 'POST' && $action === 'test_system_settings_connection') {
         handleTestSystemSettingsConnection();
+        exit;
     }
 
     if ($method === 'POST' && $action === 'save_system_settings') {
         handleSaveSystemSettings();
+        exit;
     }
 
     $conn = getDbConnection();
@@ -781,7 +791,7 @@ function performJsonHttpRequest($url, $method, $payload = null)
         $headers[] = 'Content-Type: application/json; charset=utf-8';
     }
 
-    $timeout = defined('PRINT_SERVER_TIMEOUT_SECONDS') ? max(1, (int)PRINT_SERVER_TIMEOUT_SECONDS) : 4;
+    $timeout = defined('PRINT_SERVER_TIMEOUT_SECONDS') ? max(1, (int)PRINT_SERVER_TIMEOUT_SECONDS) : 2;
     $responseBody = '';
     $statusCode = 0;
 
