@@ -171,8 +171,8 @@ function getDbConnection()
         throw new Exception('Database connection failed: ' . $conn->connect_error);
     }
 
-    if (!$conn->set_charset('utf8')) {
-        throw new Exception('Unable to set charset utf8');
+    if (!$conn->set_charset('utf8mb4')) {
+        throw new Exception('Unable to set charset utf8mb4');
     }
 
     return $conn;

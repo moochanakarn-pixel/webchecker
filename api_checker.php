@@ -420,6 +420,7 @@ function handleTestSystemSettingsConnection()
         jsonResponse(array('success' => false, 'error' => implode(' | ', $errors)), 422);
     }
 
+    $staffName = '';
     try {
         $conn = connectWithSystemSettings($settings);
         $staffName = lookupStaffDisplayNameByConnection($conn, $settings['finish_staff_id']);
@@ -443,6 +444,7 @@ function handleSaveSystemSettings()
         jsonResponse(array('success' => false, 'error' => implode(' | ', $errors)), 422);
     }
 
+    $staffName = '';
     try {
         $conn = connectWithSystemSettings($settings);
         $staffName = lookupStaffDisplayNameByConnection($conn, $settings['finish_staff_id']);

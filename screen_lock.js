@@ -3,6 +3,7 @@ var cfg = window._kdsLockCfg || {};
 var MAX = cfg.maxScreens || 3;
 var HB  = cfg.hb || 8000;
 var KEY = 'kds_tabs';
+var pingInterval = null;
 
 // instanceId unique ต่อ tab นี้ — ใช้ sessionStorage
 var myId = sessionStorage.getItem('kds_iid');
@@ -60,7 +61,7 @@ function unregister() {
 
 function init() {
     if (!register()) { showBlock(); return; }
-    setInterval(ping, HB);
+    pingInterval = setInterval(ping, HB);
     window.addEventListener('beforeunload', unregister);
     window.addEventListener('storage', function(e){
         if (e.key !== KEY) return;
@@ -118,7 +119,8 @@ function showBlock() {
             saveTabs(tabs);
             var el = document.getElementById('kds-lo');
             if (el) el.remove();
-            setInterval(ping, HB);
+            if (pingInterval) clearInterval(pingInterval);
+            pingInterval = setInterval(ping, HB);
         };
     }, 100);
 }
