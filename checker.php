@@ -964,7 +964,7 @@
             try {
                 clearBarcodeInput();
                 barcodeCaptureState.lastCameraValue = '';
-                barcodeCaptureState.cameraDetector = new BarcodeDetector({ formats: ['code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'codabar'] });
+                barcodeCaptureState.cameraDetector = new BarcodeDetector({ formats: ['code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'codabar', 'qr_code'] });
                 const preferredFacingMode = barcodeCaptureState.preferredFacingMode === 'environment' ? 'environment' : 'user';
                 let stream = null;
                 try {
