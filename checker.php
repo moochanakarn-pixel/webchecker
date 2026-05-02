@@ -46,7 +46,14 @@ $_ckBase = _computeCheckerBase();
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title><?php echo h(APP_TITLE); ?></title>
     <script src="<?php echo $_ckBase; ?>/jsqr.min.js"></script>
-    <script>window._kdsBase = <?php echo json_encode($_ckBase); ?>;</script>
+    <script>
+        window._kdsBase = <?php echo json_encode($_ckBase); ?>;
+        window._kdsCid  = <?php echo (int)CURRENT_COMPUTER_ID; ?>;
+        function kdsApiFetch(url, opts) {
+            var sep = url.indexOf('?') >= 0 ? '&' : '?';
+            return fetch(url + sep + 'kds_cid=' + _kdsCid, opts || {});
+        }
+    </script>
     <?php screenLockJavascript(); ?>
     <style>
         :root{
@@ -1231,7 +1238,7 @@ $_ckBase = _computeCheckerBase();
             state.timerSettingsOpen = true;
             syncTimerSettingsState();
             try {
-                const response = await fetch(_kdsBase + '/api_checker.php?action=get_system_settings&_=' + Date.now(), { cache: 'no-store' });
+                const response = await kdsApiFetch(_kdsBase + '/api_checker.php?action=get_system_settings&_=' + Date.now(), { cache: 'no-store' });
                 const data = await response.json();
                 if (!response.ok || !data.success) {
                     throw new Error(data.error || 'โหลดค่าระบบไม่สำเร็จ');
@@ -1252,7 +1259,7 @@ $_ckBase = _computeCheckerBase();
         async function saveTimerSettings() {
             const payload = collectSystemSettingsFromModal();
             try {
-                const response = await fetch(_kdsBase + '/api_checker.php', {
+                const response = await kdsApiFetch(_kdsBase + '/api_checker.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
                     body: buildSystemSettingsParams('save_system_settings', payload).toString()
@@ -1319,7 +1326,7 @@ $_ckBase = _computeCheckerBase();
             const q = state.soldOutKeyword || '';
             if (list) list.innerHTML = '<div class="empty">กำลังโหลดรายการสินค้า...</div>';
             try {
-                const response = await fetch(_kdsBase + '/api_checker.php?action=list_out_of_stock_products&q=' + encodeURIComponent(q) + '&_=' + Date.now(), { cache: 'no-store' });
+                const response = await kdsApiFetch(_kdsBase + '/api_checker.php?action=list_out_of_stock_products&q=' + encodeURIComponent(q) + '&_=' + Date.now(), { cache: 'no-store' });
                 const data = await response.json();
                 if (!response.ok || !data.success) {
                     throw new Error(data.error || 'โหลดรายการสินค้าไม่สำเร็จ');
@@ -1379,7 +1386,7 @@ $_ckBase = _computeCheckerBase();
                 params.set('product_id', productId);
                 params.set('is_out_of_stock', isOutOfStock ? '1' : '0');
                 params.set('update_by', getFinishStaffId());
-                const response = await fetch(_kdsBase + '/api_checker.php', {
+                const response = await kdsApiFetch(_kdsBase + '/api_checker.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
                     body: params.toString()
@@ -1492,7 +1499,7 @@ $_ckBase = _computeCheckerBase();
             const payload = collectSystemSettingsFromModal();
             showSystemSettingsStatus('กำลังทดสอบการเชื่อมต่อ...', 'success');
             try {
-                const response = await fetch(_kdsBase + '/api_checker.php', {
+                const response = await kdsApiFetch(_kdsBase + '/api_checker.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
                     body: buildSystemSettingsParams('test_system_settings_connection', payload).toString()
@@ -1518,7 +1525,7 @@ $_ckBase = _computeCheckerBase();
                 return;
             }
             try {
-                const response = await fetch(_kdsBase + '/api_checker.php?action=lookup_staff_name&staff_id=' + encodeURIComponent(staffId) + '&_=' + Date.now(), { cache: 'no-store' });
+                const response = await kdsApiFetch(_kdsBase + '/api_checker.php?action=lookup_staff_name&staff_id=' + encodeURIComponent(staffId) + '&_=' + Date.now(), { cache: 'no-store' });
                 const data = await response.json();
                 if (!response.ok || !data.success) {
                     throw new Error(data.error || 'ไม่สามารถตรวจสอบชื่อพนักงานได้');
@@ -1589,7 +1596,7 @@ $_ckBase = _computeCheckerBase();
             const silent = !!options.silent;
             try {
                 setStatusText('กำลังโหลด...');
-                const response = await fetch(_kdsBase + '/api_checker.php?action=list_active&_=' + Date.now(), { cache: 'no-store' });
+                const response = await kdsApiFetch(_kdsBase + '/api_checker.php?action=list_active&_=' + Date.now(), { cache: 'no-store' });
                 const data = await response.json();
                 if (!response.ok || !data.success) {
                     throw new Error(data.error || 'โหลดคิวไม่สำเร็จ');
@@ -1616,7 +1623,7 @@ $_ckBase = _computeCheckerBase();
             options = options || {};
             const silent = !!options.silent;
             try {
-                const response = await fetch(_kdsBase + '/api_checker.php?action=list_finished&_=' + Date.now(), { cache: 'no-store' });
+                const response = await kdsApiFetch(_kdsBase + '/api_checker.php?action=list_finished&_=' + Date.now(), { cache: 'no-store' });
                 const data = await response.json();
                 if (!response.ok || !data.success) {
                     throw new Error(data.error || 'โหลดรายการเสร็จไม่สำเร็จ');
@@ -2053,7 +2060,7 @@ $_ckBase = _computeCheckerBase();
                 params.set('PrinterID', printerId);
                 params.set('finish_staff_id', getFinishStaffId());
 
-                const response = await fetch(_kdsBase + '/api_checker.php', {
+                const response = await kdsApiFetch(_kdsBase + '/api_checker.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
                     body: params.toString()
@@ -2148,7 +2155,7 @@ $_ckBase = _computeCheckerBase();
                 params.set('barcode', barcode);
                 params.set('finish_staff_id', getFinishStaffId());
 
-                const response = await fetch(_kdsBase + '/api_checker.php', {
+                const response = await kdsApiFetch(_kdsBase + '/api_checker.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
                     body: params.toString()
@@ -2196,7 +2203,7 @@ $_ckBase = _computeCheckerBase();
                 params.set('PrinterID', printerId);
                 params.set('finish_staff_id', getFinishStaffId());
 
-                const response = await fetch(_kdsBase + '/api_checker.php', {
+                const response = await kdsApiFetch(_kdsBase + '/api_checker.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
                     body: params.toString()
@@ -2243,7 +2250,7 @@ $_ckBase = _computeCheckerBase();
                 params.set('SubProcessID', subProcessId);
                 params.set('PrinterID', printerId);
 
-                const response = await fetch(_kdsBase + '/api_checker.php', {
+                const response = await kdsApiFetch(_kdsBase + '/api_checker.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
                     body: params.toString()
@@ -2602,7 +2609,7 @@ $_ckBase = _computeCheckerBase();
 
         // โหลด shops เมื่อ settings modal เปิด
         function loadShops(selectedId) {
-            fetch(_kdsBase + '/api_checker.php?action=list_shops&_=' + Date.now(), { cache: 'no-store' })
+            kdsApiFetch(_kdsBase + '/api_checker.php?action=list_shops&_=' + Date.now(), { cache: 'no-store' })
             .then(function(r){ return r.json(); })
             .then(function(d){
                 if (!d.success || !d.shops) return;
@@ -2661,7 +2668,7 @@ $_ckBase = _computeCheckerBase();
         // โหลด zones จาก API
         async function loadZones() {
             try {
-                const r = await fetch(_kdsBase + '/api_checker.php?action=list_zones&_=' + Date.now(), { cache: 'no-store' });
+                const r = await kdsApiFetch(_kdsBase + '/api_checker.php?action=list_zones&_=' + Date.now(), { cache: 'no-store' });
                 const d = await r.json();
                 if (d.success && d.zones && d.zones.length > 0) {
                     zones = d.zones;
@@ -2690,7 +2697,7 @@ $_ckBase = _computeCheckerBase();
         }
 
         function filterCardsByZone(zoneid) {
-            fetch(_kdsBase + '/api_checker.php?action=list_tables_in_zone&zoneid=' + zoneid + '&_=' + Date.now(), { cache: 'no-store' })
+            kdsApiFetch(_kdsBase + '/api_checker.php?action=list_tables_in_zone&zoneid=' + zoneid + '&_=' + Date.now(), { cache: 'no-store' })
             .then(function(r){ return r.json(); })
             .then(function(d){
                 if (!d.success || !d.table_ids) return;
@@ -2769,7 +2776,7 @@ $_ckBase = _computeCheckerBase();
         });
 
         function lookupStaffCode(code) {
-            fetch(_kdsBase + '/api_checker.php?action=lookup_staff_by_code&staff_code=' + encodeURIComponent(code) + '&_=' + Date.now(), { cache: 'no-store' })
+            kdsApiFetch(_kdsBase + '/api_checker.php?action=lookup_staff_by_code&staff_code=' + encodeURIComponent(code) + '&_=' + Date.now(), { cache: 'no-store' })
             .then(function(r){ return r.json(); })
             .then(function(d){
                 if (d.success) {
@@ -2789,7 +2796,7 @@ $_ckBase = _computeCheckerBase();
         const savedId = localStorage.getItem('checker_finish_staff_id');
         if (savedId && parseInt(savedId) > 0) {
             // โหลดชื่อจาก staff_id เดิม
-            fetch(_kdsBase + '/api_checker.php?action=lookup_staff_name&staff_id=' + savedId + '&_=' + Date.now(), { cache: 'no-store' })
+            kdsApiFetch(_kdsBase + '/api_checker.php?action=lookup_staff_name&staff_id=' + savedId + '&_=' + Date.now(), { cache: 'no-store' })
             .then(function(r){ return r.json(); })
             .then(function(d){
                 if (d.success && d.staff_name) {

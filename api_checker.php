@@ -62,6 +62,13 @@ function requestedMethod()
     return isset($_SERVER['REQUEST_METHOD']) ? strtoupper((string)$_SERVER['REQUEST_METHOD']) : 'GET';
 }
 
+// ถ้า JS ส่ง kds_cid มา ให้ใช้ค่านั้น (รองรับ multi-KDS subfolder)
+function getEffectiveComputerId()
+{
+    $cid = isset($_REQUEST['kds_cid']) ? (int)$_REQUEST['kds_cid'] : 0;
+    return $cid > 0 ? $cid : (int)CURRENT_COMPUTER_ID;
+}
+
 function requestedAction()
 {
     $act = isset($_GET['action']) ? trim((string)$_GET['action']) : (isset($_POST['action']) ? trim((string)$_POST['action']) : 'list');
@@ -611,7 +618,7 @@ function buildFilterInfo($conn = null, $overridePrintServerUrl = '')
 {
     $displayPrinters = array();
     if ($conn instanceof mysqli) {
-        $displayPrinters = fetchAvailablePrinters($conn, (int)CURRENT_COMPUTER_ID);
+        $displayPrinters = fetchAvailablePrinters($conn, getEffectiveComputerId());
     }
     $normalizedPrintServerUrl = normalizePrintServerBaseUrl($overridePrintServerUrl);
     $checkoutPrinters = resolveCheckoutPrinterOptions($conn, $normalizedPrintServerUrl);
@@ -639,7 +646,7 @@ function resolveCheckoutPrinterOptions($conn = null, $overridePrintServerUrl = '
     }
 
     if ($provider === 'queue' && $conn instanceof mysqli) {
-        return fetchAvailablePrinters($conn, (int)CURRENT_COMPUTER_ID);
+        return fetchAvailablePrinters($conn, getEffectiveComputerId());
     }
 
     return array();
@@ -972,7 +979,7 @@ function buildStats($activeRows, $finishedRows)
 
 function fetchActiveRows($conn)
 {
-    $allowedPrinterIds = fetchAllowedPrinterIds($conn, (int)CURRENT_COMPUTER_ID);
+    $allowedPrinterIds = fetchAllowedPrinterIds($conn, getEffectiveComputerId());
 
     // รวม voided/deleted (98) ด้วยเพื่อแสดงสีเทา
     $statusList = implode(', ', array(
@@ -1037,7 +1044,7 @@ function fetchActiveRows($conn)
 
 function fetchFinishedRows($conn)
 {
-    $allowedPrinterIds = fetchAllowedPrinterIds($conn, (int)CURRENT_COMPUTER_ID);
+    $allowedPrinterIds = fetchAllowedPrinterIds($conn, getEffectiveComputerId());
 
     $where = array('opf.ProcessStatus = ' . (int)PROCESS_STATUS_FINISHED);
     appendAllowedPrinterFilter($where, $allowedPrinterIds, 'opf');
@@ -1782,7 +1789,7 @@ function fetchLockedProcessRowByBarcode($conn, $processId, array $statuses)
         return null;
     }
 
-    $allowedPrinterIds = fetchAllowedPrinterIds($conn, (int)CURRENT_COMPUTER_ID);
+    $allowedPrinterIds = fetchAllowedPrinterIds($conn, getEffectiveComputerId());
     if (!$allowedPrinterIds) {
         return null;
     }
@@ -2030,7 +2037,7 @@ function buildCheckoutPrintServerPayload($row, $printerName, $finishStaffId, $fi
 
 function enqueueCheckoutPrintJob($conn, $sourceRow, $checkoutPrinterId, $finishStaffId, $finishedAt)
 {
-    $printer = findAvailablePrinterById($conn, (int)CURRENT_COMPUTER_ID, (int)$checkoutPrinterId);
+    $printer = findAvailablePrinterById($conn, getEffectiveComputerId(), (int)$checkoutPrinterId);
     if (!$printer) {
         throw new Exception('ไม่สามารถพิมพ์ไปยังเครื่องปริ๊นที่เลือกได้');
     }
@@ -2069,7 +2076,7 @@ function enqueueCheckoutPrintJob($conn, $sourceRow, $checkoutPrinterId, $finishS
     $printerId = (int)$printer['printer_id'];
     $printerName = isset($printer['printer_name']) ? (string)$printer['printer_name'] : ('Printer #' . $printerId);
     $printerProperty = isset($printer['printer_device_name']) ? (string)$printer['printer_device_name'] : '';
-    $jobOrderFromComputerId = (int)CURRENT_COMPUTER_ID;
+    $jobOrderFromComputerId = getEffectiveComputerId();
     $jobOrderStatus = 0;
 
     $sql = "
