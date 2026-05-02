@@ -13,6 +13,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/WebChecker/icon-192.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title><?php echo h(APP_TITLE); ?></title>
+    <script src="jsqr.min.js"></script>
     <?php screenLockJavascript(); ?>
     <style>
         :root{
@@ -648,6 +649,7 @@
             <div class="camera-wrap">
                 <div class="camera-frame">
                     <video id="barcodeCameraVideo" class="camera-video" playsinline muted autoplay></video>
+                    <canvas id="barcodeCameraCanvas" style="display:none"></canvas>
                     <div class="camera-overlay"><div class="camera-guide"></div></div>
                 </div>
                 <div class="camera-status" id="barcodeCameraStatus">กดเปิดกล้องแล้วหันไปที่บาร์โค้ดบนใบออเดอร์</div>
@@ -925,21 +927,48 @@
             if (!state.barcodeCameraOpen) return;
             const video = document.getElementById('barcodeCameraVideo');
             const status = document.getElementById('barcodeCameraStatus');
-            if (!video || !barcodeCaptureState.cameraDetector) return;
-            try {
-                const results = await barcodeCaptureState.cameraDetector.detect(video);
-                if (Array.isArray(results) && results.length) {
-                    const value = String(results[0].rawValue || '').trim();
-                    if (value && value !== barcodeCaptureState.lastCameraValue) {
-                        barcodeCaptureState.lastCameraValue = value;
-                        if (status) status.innerHTML = '<strong>พบบาร์โค้ด:</strong> ' + escapeHtml(value);
-                        applyScannedBarcodeValue(value, true);
-                        stopBarcodeCamera();
-                        return;
+            if (!video) return;
+
+            let foundValue = null;
+
+            // BarcodeDetector สำหรับบาร์โค้ดและ QR (บนอุปกรณ์ที่รองรับ)
+            if (barcodeCaptureState.cameraDetector) {
+                try {
+                    const results = await barcodeCaptureState.cameraDetector.detect(video);
+                    if (Array.isArray(results) && results.length) {
+                        foundValue = String(results[0].rawValue || '').trim();
                     }
-                }
-            } catch (e) {
-                if (status) status.textContent = 'กำลังสแกน...';
+                } catch (e) {}
+            }
+
+            // jsQR fallback สำหรับ QR code บนอุปกรณ์ที่ BarcodeDetector ไม่รองรับ QR
+            if (!foundValue && typeof jsQR === 'function' && video.readyState === video.HAVE_ENOUGH_DATA) {
+                try {
+                    const canvas = document.getElementById('barcodeCameraCanvas');
+                    if (canvas) {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+                        if (code && code.data) {
+                            foundValue = String(code.data).trim();
+                        }
+                    }
+                } catch (e) {}
+            }
+
+            if (foundValue && foundValue !== barcodeCaptureState.lastCameraValue) {
+                barcodeCaptureState.lastCameraValue = foundValue;
+                if (status) status.innerHTML = '<strong>พบโค้ด:</strong> ' + escapeHtml(foundValue);
+                applyScannedBarcodeValue(foundValue, true);
+                stopBarcodeCamera();
+                return;
+            }
+
+            if (status && status.textContent === 'กำลังสแกน...' || !foundValue) {
+                // ไม่ต้องอัพเดต status ทุก frame
             }
             barcodeCaptureState.cameraScanTimer = requestAnimationFrame(scanBarcodeFrame);
         }
