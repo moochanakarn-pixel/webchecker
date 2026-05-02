@@ -4,13 +4,32 @@ if (session_status() === PHP_SESSION_NONE) { session_start(); }
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth_check.php';
 $machineDisplayName = getMachineDisplayName();
-// คำนวณ base URL ของโฟลเดอร์ checker/ เพื่อให้ assets โหลดถูกต้องแม้ถูกเรียกจาก KDS subfolder
-$_ckDocRoot = str_replace('\\', '/', rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/'));
-$_ckDir     = str_replace('\\', '/', __DIR__);
-$_ckRel     = ($_ckDocRoot !== '' && strpos($_ckDir, $_ckDocRoot) === 0)
-    ? ltrim(substr($_ckDir, strlen($_ckDocRoot)), '/')
-    : ltrim($_ckDir, '/');
-$_ckBase    = '/' . $_ckRel;
+// คำนวณ base URL ของโฟลเดอร์ checker/ โดยใช้ SCRIPT_NAME (URL) แทน DOCUMENT_ROOT (filesystem)
+// รองรับ IIS virtual application ที่ URL path ไม่ตรงกับ filesystem path
+function _computeCheckerBase() {
+    $myDir     = str_replace('\\', '/', realpath(__DIR__) ?: __DIR__);
+    $scriptFile = isset($_SERVER['SCRIPT_FILENAME']) ? (string)$_SERVER['SCRIPT_FILENAME'] : '';
+    $scriptDir  = $scriptFile !== ''
+        ? str_replace('\\', '/', dirname(realpath($scriptFile) ?: $scriptFile))
+        : $myDir;
+
+    // นับว่า myDir อยู่สูงกว่า scriptDir กี่ชั้น
+    $levelsUp = 0;
+    $d = $scriptDir;
+    while (strlen($d) > strlen($myDir) && $d !== dirname($d)) {
+        $d = dirname($d);
+        $levelsUp++;
+    }
+
+    // เดิน URL ขึ้นไปเท่ากัน
+    $scriptUrl = isset($_SERVER['SCRIPT_NAME']) ? (string)$_SERVER['SCRIPT_NAME'] : '';
+    $urlDir    = rtrim(str_replace('\\', '/', dirname($scriptUrl)), '/');
+    for ($i = 0; $i < $levelsUp; $i++) {
+        $urlDir = rtrim(str_replace('\\', '/', dirname($urlDir)), '/');
+    }
+    return ($urlDir === '' || $urlDir === '.') ? '' : $urlDir;
+}
+$_ckBase = _computeCheckerBase();
 ?>
 <!DOCTYPE html>
 <html lang="th">

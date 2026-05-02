@@ -32,13 +32,21 @@ if (!function_exists('screenLockJavascript')) {
             'note'       => 'หน้าจอที่เปิดนานที่สุดจะถูกล็อคออกอัตโนมัติ',
         );
         $json = json_encode($cfg, JSON_UNESCAPED_UNICODE);
-        // คำนวณ URL จาก __DIR__ เพื่อให้ถูกต้องแม้ถูกเรียกจาก subfolder เช่น KDS1/
-        $docRoot = str_replace('\\', '/', rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/'));
-        $phpDir  = str_replace('\\', '/', __DIR__);
-        $relPath = ($docRoot !== '' && strpos($phpDir, $docRoot) === 0)
-            ? ltrim(substr($phpDir, strlen($docRoot)), '/')
-            : ltrim($phpDir, '/');
-        $jsUrl = '/' . $relPath . '/screen_lock.js';
+        // คำนวณ URL ของ screen_lock.js โดยใช้ SCRIPT_NAME (URL path) แทน DOCUMENT_ROOT
+        $slBase = function_exists('_computeCheckerBase') ? _computeCheckerBase() : (function() {
+            $myDir     = str_replace('\\', '/', realpath(__DIR__) ?: __DIR__);
+            $scriptFile = isset($_SERVER['SCRIPT_FILENAME']) ? (string)$_SERVER['SCRIPT_FILENAME'] : '';
+            $scriptDir  = $scriptFile !== ''
+                ? str_replace('\\', '/', dirname(realpath($scriptFile) ?: $scriptFile))
+                : $myDir;
+            $levelsUp = 0;
+            $d = $scriptDir;
+            while (strlen($d) > strlen($myDir) && $d !== dirname($d)) { $d = dirname($d); $levelsUp++; }
+            $urlDir = rtrim(str_replace('\\', '/', dirname(isset($_SERVER['SCRIPT_NAME']) ? (string)$_SERVER['SCRIPT_NAME'] : '')), '/');
+            for ($i = 0; $i < $levelsUp; $i++) { $urlDir = rtrim(str_replace('\\', '/', dirname($urlDir)), '/'); }
+            return ($urlDir === '' || $urlDir === '.') ? '' : $urlDir;
+        })();
+        $jsUrl = $slBase . '/screen_lock.js';
         echo '<script>window._kdsLockCfg=' . $json . ';</script>' . "\n";
         echo '<script src="' . htmlspecialchars($jsUrl, ENT_QUOTES) . '"></script>' . "\n";
     }
