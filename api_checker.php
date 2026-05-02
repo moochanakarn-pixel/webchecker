@@ -46,8 +46,9 @@ require_once __DIR__ . '/auth_check.php';
 // กัน barcode scan ซ้ำฝั่ง PHP
 function guardDuplicateScan($code) {
     if (empty($code)) return false;
-    $key     = 'last_scan_code';
-    $timeKey = 'last_scan_time';
+    $cid     = getEffectiveComputerId();
+    $key     = 'last_scan_code_' . $cid;
+    $timeKey = 'last_scan_time_' . $cid;
     if (isset($_SESSION[$key]) && $_SESSION[$key] === $code) {
         $elapsed = time() - (int)($_SESSION[$timeKey] ?? 0);
         if ($elapsed < 2) return true;
@@ -67,6 +68,22 @@ function getEffectiveComputerId()
 {
     $cid = isset($_REQUEST['kds_cid']) ? (int)$_REQUEST['kds_cid'] : 0;
     return $cid > 0 ? $cid : (int)CURRENT_COMPUTER_ID;
+}
+
+// หาพาธของ settings.local.php ที่ถูกต้องสำหรับ KDS นั้น
+// รับ kds_sub จาก request (เช่น "KDS1") เพื่อเขียนไฟล์ถูกโฟลเดอร์
+function resolveKdsSettingsPath()
+{
+    $sub = isset($_REQUEST['kds_sub']) ? trim((string)$_REQUEST['kds_sub']) : '';
+    // validate: อนุญาตเฉพาะ alphanumeric, dash, underscore — ห้าม / และ ..
+    if ($sub !== '' && preg_match('/^[A-Za-z0-9_\-]+$/', $sub)) {
+        $candidate = __DIR__ . DIRECTORY_SEPARATOR . $sub . DIRECTORY_SEPARATOR . 'settings.local.php';
+        // ต้องมีโฟลเดอร์นั้นจริงๆ (checker.php อยู่ที่นั่น)
+        if (is_dir(__DIR__ . DIRECTORY_SEPARATOR . $sub)) {
+            return $candidate;
+        }
+    }
+    return getSettingsLocalFilePath();
 }
 
 function requestedAction()
@@ -99,8 +116,8 @@ function validateSystemSettingsPayload($settings)
     if ($settings['db_host'] === '') {
         $errors[] = 'กรุณากรอก DB Host / IP';
     }
-    if ($settings['db_port'] <= 0) {
-        $errors[] = 'Port ต้องมากกว่า 0';
+    if ($settings['db_port'] <= 0 || $settings['db_port'] > 65535) {
+        $errors[] = 'Port ต้องอยู่ระหว่าง 1-65535';
     }
     if ($settings['db_name'] === '') {
         $errors[] = 'กรุณากรอก Database Name';
@@ -232,7 +249,7 @@ function writeSystemSettingsFile($settings)
     ));
 
     $content = "<?php\nreturn " . var_export($next, true) . ";\n";
-    $path = getSettingsLocalFilePath();
+    $path = resolveKdsSettingsPath();
     if (@file_put_contents($path, $content, LOCK_EX) === false) {
         throw new Exception('ไม่สามารถบันทึกไฟล์ settings.local.php ได้');
     }

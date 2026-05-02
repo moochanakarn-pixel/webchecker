@@ -46,12 +46,22 @@ $_ckBase = _computeCheckerBase();
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title><?php echo h(APP_TITLE); ?></title>
     <script src="<?php echo $_ckBase; ?>/jsqr.min.js"></script>
+    <?php
+    // หา subfolder ที่ settings.local.php อยู่ เพื่อส่งกลับไปให้ api รู้ว่าต้องเขียนไฟล์ไหน
+    $_ckSettingsFile = getSettingsLocalFilePath();
+    $_ckSettingsDir  = str_replace('\\', '/', dirname(realpath($_ckSettingsFile) ?: $_ckSettingsFile));
+    $_ckMyDir        = str_replace('\\', '/', __DIR__);
+    $_ckSettingsSub  = ($_ckSettingsDir === $_ckMyDir)
+        ? ''
+        : ltrim(substr($_ckSettingsDir, strlen($_ckMyDir)), '/');
+    ?>
     <script>
-        window._kdsBase = <?php echo json_encode($_ckBase); ?>;
-        window._kdsCid  = <?php echo (int)CURRENT_COMPUTER_ID; ?>;
+        window._kdsBase        = <?php echo json_encode($_ckBase); ?>;
+        window._kdsCid         = <?php echo (int)CURRENT_COMPUTER_ID; ?>;
+        window._kdsSettingsSub = <?php echo json_encode($_ckSettingsSub); ?>;
         function kdsApiFetch(url, opts) {
             var sep = url.indexOf('?') >= 0 ? '&' : '?';
-            return fetch(url + sep + 'kds_cid=' + _kdsCid, opts || {});
+            return fetch(url + sep + 'kds_cid=' + _kdsCid + '&kds_sub=' + encodeURIComponent(_kdsSettingsSub), opts || {});
         }
     </script>
     <?php screenLockJavascript(); ?>
