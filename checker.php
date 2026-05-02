@@ -756,6 +756,7 @@ $_ckBase = _computeCheckerBase();
             cameraDetector: null,
             cameraScanTimer: null,
             lastCameraValue: '',
+            lastScanAt: 0,       // throttle — timestamp ของ frame ล่าสุดที่ scan จริง
             awaitingFreshScan: true,
             preferredFacingMode: 'user'
         };
@@ -975,6 +976,15 @@ $_ckBase = _computeCheckerBase();
 
         async function scanBarcodeFrame() {
             if (!state.barcodeCameraOpen) return;
+
+            const now = Date.now();
+            // throttle: scan จริงทุก 200ms เท่านั้น ไม่ต้องทุก frame (60fps → ~5fps)
+            if (now - barcodeCaptureState.lastScanAt < 200) {
+                barcodeCaptureState.cameraScanTimer = requestAnimationFrame(scanBarcodeFrame);
+                return;
+            }
+            barcodeCaptureState.lastScanAt = now;
+
             const video = document.getElementById('barcodeCameraVideo');
             const status = document.getElementById('barcodeCameraStatus');
             if (!video) return;
@@ -1013,13 +1023,13 @@ $_ckBase = _computeCheckerBase();
                 barcodeCaptureState.lastCameraValue = foundValue;
                 if (status) status.innerHTML = '<strong>พบโค้ด:</strong> ' + escapeHtml(foundValue);
                 applyScannedBarcodeValue(foundValue, true);
-                stopBarcodeCamera();
-                return;
+                // continuous mode — ไม่ปิดกล้อง รอ 1.5 วิแล้วพร้อมรับโค้ดถัดไป
+                setTimeout(function() {
+                    barcodeCaptureState.lastCameraValue = '';
+                    if (status && state.barcodeCameraOpen) status.textContent = 'พร้อมรับถัดไป หันไปที่บาร์โค้ดถัดไป';
+                }, 1500);
             }
 
-            if (status && status.textContent === 'กำลังสแกน...' || !foundValue) {
-                // ไม่ต้องอัพเดต status ทุก frame
-            }
             barcodeCaptureState.cameraScanTimer = requestAnimationFrame(scanBarcodeFrame);
         }
 
@@ -2559,6 +2569,10 @@ $_ckBase = _computeCheckerBase();
         initBarcodeSettings();
         loadAll().then(function() {
             focusBarcodeInput();
+            // auto-open กล้องถ้า barcode_camera_enabled = 1
+            if (getBarcodeCameraEnabled() && barcodeMediaSupported && barcodeCameraSupported) {
+                setTimeout(openBarcodeCamera, 1500);
+            }
         });
 
         setInterval(function() {
