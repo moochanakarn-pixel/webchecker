@@ -32,9 +32,13 @@ if (!function_exists('screenLockJavascript')) {
             'note'       => 'หน้าจอที่เปิดนานที่สุดจะถูกล็อคออกอัตโนมัติ',
         );
         $json = json_encode($cfg, JSON_UNESCAPED_UNICODE);
-        // dynamic path — ใช้ได้ทุก subfolder
-        $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
-        $jsUrl = rtrim($scriptDir, '/') . '/screen_lock.js';
+        // คำนวณ URL จาก __DIR__ เพื่อให้ถูกต้องแม้ถูกเรียกจาก subfolder เช่น KDS1/
+        $docRoot = str_replace('\\', '/', rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/'));
+        $phpDir  = str_replace('\\', '/', __DIR__);
+        $relPath = ($docRoot !== '' && strpos($phpDir, $docRoot) === 0)
+            ? ltrim(substr($phpDir, strlen($docRoot)), '/')
+            : ltrim($phpDir, '/');
+        $jsUrl = '/' . $relPath . '/screen_lock.js';
         echo '<script>window._kdsLockCfg=' . $json . ';</script>' . "\n";
         echo '<script src="' . htmlspecialchars($jsUrl, ENT_QUOTES) . '"></script>' . "\n";
     }

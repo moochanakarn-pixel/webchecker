@@ -5,7 +5,7 @@ if (session_status() === PHP_SESSION_NONE) { session_start(); }
 // =============================
 function loadLocalSettings()
 {
-    $file = __DIR__ . DIRECTORY_SEPARATOR . 'settings.local.php';
+    $file = getSettingsLocalFilePath();
     if (!is_file($file)) {
         return array();
     }
@@ -100,6 +100,15 @@ function getMachineDisplayName()
 
 function getSettingsLocalFilePath()
 {
+    // โหลด settings จาก folder ที่เรียก script (รองรับ KDS subfolders)
+    $scriptFile = isset($_SERVER['SCRIPT_FILENAME']) ? (string)$_SERVER['SCRIPT_FILENAME'] : '';
+    if ($scriptFile !== '') {
+        $scriptDir = dirname(realpath($scriptFile) ?: $scriptFile);
+        $localPath = $scriptDir . DIRECTORY_SEPARATOR . 'settings.local.php';
+        if (is_file($localPath)) {
+            return $localPath;
+        }
+    }
     return __DIR__ . DIRECTORY_SEPARATOR . 'settings.local.php';
 }
 

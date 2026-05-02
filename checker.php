@@ -1,19 +1,32 @@
-<?php ob_start(); if (session_status() === PHP_SESSION_NONE) { session_start(); } require_once __DIR__ . '/config.php'; require_once __DIR__ . '/auth_check.php'; $machineDisplayName = getMachineDisplayName(); ?>
+<?php
+ob_start();
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/auth_check.php';
+$machineDisplayName = getMachineDisplayName();
+// คำนวณ base URL ของโฟลเดอร์ checker/ เพื่อให้ assets โหลดถูกต้องแม้ถูกเรียกจาก KDS subfolder
+$_ckDocRoot = str_replace('\\', '/', rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/'));
+$_ckDir     = str_replace('\\', '/', __DIR__);
+$_ckRel     = ($_ckDocRoot !== '' && strpos($_ckDir, $_ckDocRoot) === 0)
+    ? ltrim(substr($_ckDir, strlen($_ckDocRoot)), '/')
+    : ltrim($_ckDir, '/');
+$_ckBase    = '/' . $_ckRel;
+?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <link rel="manifest" href="/WebChecker/manifest.php">
+    <link rel="manifest" href="<?php echo $_ckBase; ?>/manifest.php">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Checker KDS">
     <meta name="theme-color" content="#1683FF">
-    <link rel="apple-touch-icon" href="/WebChecker/icon-512.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="/WebChecker/icon-192.png">
+    <link rel="apple-touch-icon" href="<?php echo $_ckBase; ?>/icon-512.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="<?php echo $_ckBase; ?>/icon-192.png">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title><?php echo h(APP_TITLE); ?></title>
-    <script src="jsqr.min.js"></script>
+    <script src="<?php echo $_ckBase; ?>/jsqr.min.js"></script>
     <?php screenLockJavascript(); ?>
     <style>
         :root{
