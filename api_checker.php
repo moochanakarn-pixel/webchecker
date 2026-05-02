@@ -1678,6 +1678,34 @@ function checkoutOne($conn)
 
             applyCheckoutSplit($conn, $childRow, $childQtyToFinish, $finishStaffId, $now);
         }
+
+        // ถ้า row ที่ checkout เป็นลูก (มี ParentProcessID) → checkout พ่อ + พี่น้องที่เหลือด้วย
+        // เพื่อป้องกันพ่อโผล่กลับมาเป็นการ์ดเดี่ยวหลัง refresh
+        $rowParentProcessId = isset($row['ParentProcessID']) ? (int)$row['ParentProcessID'] : 0;
+        if ($rowParentProcessId > 0) {
+            $parentRows = fetchLockedRowsByProcessId($conn, (int)$row['ProductLevelID'], $rowParentProcessId, (int)$row['PrinterID'], array(PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS));
+            foreach ($parentRows as $parentRow) {
+                $parentQtyBeforeSplit = isset($parentRow['ProductAmount']) ? (float)$parentRow['ProductAmount'] : 0;
+                if ($parentQtyBeforeSplit <= 0) {
+                    continue;
+                }
+                applyCheckoutSplit($conn, $parentRow, 1, $finishStaffId, $now);
+
+                $siblingRows = fetchLockedChildRows($conn, (int)$parentRow['ProductLevelID'], $rowParentProcessId, (int)$parentRow['PrinterID'], array(PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS));
+                foreach ($siblingRows as $siblingRow) {
+                    $siblingQty = isset($siblingRow['ProductAmount']) ? (float)$siblingRow['ProductAmount'] : 0;
+                    if ($siblingQty <= 0) {
+                        continue;
+                    }
+                    $siblingQtyToFinish = calculateChildCheckoutQty($parentQtyBeforeSplit, $siblingQty);
+                    if ($siblingQtyToFinish <= 0) {
+                        continue;
+                    }
+                    applyCheckoutSplit($conn, $siblingRow, $siblingQtyToFinish, $finishStaffId, $now);
+                }
+            }
+        }
+
         $conn->commit();
 
         jsonResponse(array(
@@ -2362,6 +2390,35 @@ function fetchLockedChildRows($conn, $productLevelId, $parentProcessId, $printer
         throw new Exception('Prepare failed: ' . $conn->error);
     }
     $stmt->bind_param('iii', $productLevelId, $parentProcessId, $printerId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $rows = array();
+    while ($result && ($row = $result->fetch_assoc())) {
+        $rows[] = $row;
+    }
+    $stmt->close();
+
+    return $rows;
+}
+
+function fetchLockedRowsByProcessId($conn, $productLevelId, $processId, $printerId, $statuses)
+{
+    $statusSql = implode(', ', array_map('intval', $statuses));
+    $sql = "
+        SELECT *
+        FROM orderprocessdetailfront
+        WHERE ProductLevelID = ?
+          AND ProcessID = ?
+          AND PrinterID = ?
+          AND ProcessStatus IN (" . $statusSql . ")
+        ORDER BY SubProcessID ASC
+        FOR UPDATE
+    ";
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new Exception('Prepare failed: ' . $conn->error);
+    }
+    $stmt->bind_param('iii', $productLevelId, $processId, $printerId);
     $stmt->execute();
     $result = $stmt->get_result();
     $rows = array();
