@@ -1679,29 +1679,18 @@ function checkoutOne($conn)
             applyCheckoutSplit($conn, $childRow, $childQtyToFinish, $finishStaffId, $now);
         }
 
-        // ถ้า row ที่ checkout เป็นลูก (มี ParentProcessID) → checkout พ่อ + พี่น้องที่เหลือด้วย
-        // เพื่อป้องกันพ่อโผล่กลับมาเป็นการ์ดเดี่ยวหลัง refresh
+        // ถ้า row ที่ checkout เป็นลูก SET → ตรวจว่าเหลือพี่น้อง active อยู่มั้ย
+        // ถ้าไม่เหลือ (ลูกตัวสุดท้าย) → auto-checkout พ่อด้วย ป้องกันพ่อโผล่เป็นการ์ดเดี่ยว
         $rowParentProcessId = isset($row['ParentProcessID']) ? (int)$row['ParentProcessID'] : 0;
         if ($rowParentProcessId > 0) {
-            $parentRows = fetchLockedRowsByProcessId($conn, (int)$row['ProductLevelID'], $rowParentProcessId, (int)$row['PrinterID'], array(PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS));
-            foreach ($parentRows as $parentRow) {
-                $parentQtyBeforeSplit = isset($parentRow['ProductAmount']) ? (float)$parentRow['ProductAmount'] : 0;
-                if ($parentQtyBeforeSplit <= 0) {
-                    continue;
-                }
-                applyCheckoutSplit($conn, $parentRow, 1, $finishStaffId, $now);
-
-                $siblingRows = fetchLockedChildRows($conn, (int)$parentRow['ProductLevelID'], $rowParentProcessId, (int)$parentRow['PrinterID'], array(PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS));
-                foreach ($siblingRows as $siblingRow) {
-                    $siblingQty = isset($siblingRow['ProductAmount']) ? (float)$siblingRow['ProductAmount'] : 0;
-                    if ($siblingQty <= 0) {
-                        continue;
+            $remainingSiblings = fetchLockedChildRows($conn, (int)$row['ProductLevelID'], $rowParentProcessId, (int)$row['PrinterID'], array(PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS));
+            if (empty($remainingSiblings)) {
+                $parentRows = fetchLockedRowsByProcessId($conn, (int)$row['ProductLevelID'], $rowParentProcessId, (int)$row['PrinterID'], array(PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS));
+                foreach ($parentRows as $parentRow) {
+                    $parentQty = isset($parentRow['ProductAmount']) ? (float)$parentRow['ProductAmount'] : 0;
+                    if ($parentQty > 0) {
+                        applyCheckoutSplit($conn, $parentRow, 1, $finishStaffId, $now);
                     }
-                    $siblingQtyToFinish = calculateChildCheckoutQty($parentQtyBeforeSplit, $siblingQty);
-                    if ($siblingQtyToFinish <= 0) {
-                        continue;
-                    }
-                    applyCheckoutSplit($conn, $siblingRow, $siblingQtyToFinish, $finishStaffId, $now);
                 }
             }
         }
