@@ -19,6 +19,27 @@ if (!SCREEN_LOCK_ENABLED) {
 $GLOBALS['_slMaxScreens'] = (int)SCREEN_LOCK_MAX_SCREENS;
 $GLOBALS['_slHbMs']       = (int)(SCREEN_LOCK_HEARTBEAT_SEC * 1000);
 
+if (!function_exists('_slComputeBase')) {
+    function _slComputeBase() {
+        $myDir      = str_replace('\\', '/', realpath(__DIR__) ?: __DIR__);
+        $scriptFile = isset($_SERVER['SCRIPT_FILENAME']) ? (string)$_SERVER['SCRIPT_FILENAME'] : '';
+        $scriptDir  = $scriptFile !== ''
+            ? str_replace('\\', '/', dirname(realpath($scriptFile) ?: $scriptFile))
+            : $myDir;
+        $levelsUp = 0;
+        $d = $scriptDir;
+        while (strlen($d) > strlen($myDir) && $d !== dirname($d)) {
+            $d = dirname($d);
+            $levelsUp++;
+        }
+        $urlDir = rtrim(str_replace('\\', '/', dirname(isset($_SERVER['SCRIPT_NAME']) ? (string)$_SERVER['SCRIPT_NAME'] : '')), '/');
+        for ($i = 0; $i < $levelsUp; $i++) {
+            $urlDir = rtrim(str_replace('\\', '/', dirname($urlDir)), '/');
+        }
+        return ($urlDir === '' || $urlDir === '.') ? '' : $urlDir;
+    }
+}
+
 if (!function_exists('screenLockJavascript')) {
     function screenLockJavascript() {
         $cfg = array(
@@ -31,22 +52,9 @@ if (!function_exists('screenLockJavascript')) {
             'btn'        => 'บังคับเข้าใช้งาน (kick หน้าจอเก่าสุด)',
             'note'       => 'หน้าจอที่เปิดนานที่สุดจะถูกล็อคออกอัตโนมัติ',
         );
-        $json = json_encode($cfg, JSON_UNESCAPED_UNICODE);
-        // คำนวณ URL ของ screen_lock.js โดยใช้ SCRIPT_NAME (URL path) แทน DOCUMENT_ROOT
-        $slBase = function_exists('_computeCheckerBase') ? _computeCheckerBase() : (function() {
-            $myDir     = str_replace('\\', '/', realpath(__DIR__) ?: __DIR__);
-            $scriptFile = isset($_SERVER['SCRIPT_FILENAME']) ? (string)$_SERVER['SCRIPT_FILENAME'] : '';
-            $scriptDir  = $scriptFile !== ''
-                ? str_replace('\\', '/', dirname(realpath($scriptFile) ?: $scriptFile))
-                : $myDir;
-            $levelsUp = 0;
-            $d = $scriptDir;
-            while (strlen($d) > strlen($myDir) && $d !== dirname($d)) { $d = dirname($d); $levelsUp++; }
-            $urlDir = rtrim(str_replace('\\', '/', dirname(isset($_SERVER['SCRIPT_NAME']) ? (string)$_SERVER['SCRIPT_NAME'] : '')), '/');
-            for ($i = 0; $i < $levelsUp; $i++) { $urlDir = rtrim(str_replace('\\', '/', dirname($urlDir)), '/'); }
-            return ($urlDir === '' || $urlDir === '.') ? '' : $urlDir;
-        })();
-        $jsUrl = $slBase . '/screen_lock.js';
+        $json  = json_encode($cfg, JSON_UNESCAPED_UNICODE);
+        $slBase = function_exists('_computeCheckerBase') ? _computeCheckerBase() : _slComputeBase();
+        $jsUrl  = $slBase . '/screen_lock.js';
         echo '<script>window._kdsLockCfg=' . $json . ';</script>' . "\n";
         echo '<script src="' . htmlspecialchars($jsUrl, ENT_QUOTES) . '"></script>' . "\n";
     }
