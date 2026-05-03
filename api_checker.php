@@ -1042,11 +1042,14 @@ function fetchActiveRows($conn)
                    AND otf2.TransactionStatusID = 7
                    AND DATE(otf2.OpenTime) = opf.OrderDate
                  LIMIT 1),
-            0) AS TransactionStatusID
+            0) AS TransactionStatusID,
+            COALESCE(pr.displayflexibleproductatchecker, 0) AS display_mode
         FROM orderprocessdetailfront opf
         LEFT JOIN salemode sm
             ON sm.SaleModeID = opf.SaleModeID
            AND sm.Deleted = 0
+        LEFT JOIN products pr
+            ON pr.ProductID = opf.ProductID
         WHERE " . implode(' AND ', $where) . "
         ORDER BY
             opf.SubmitOrderDateTime ASC,
@@ -1209,24 +1212,35 @@ function mergeChildProcessRowsIntoParents($rows)
             $rows[$parentIndex]['comments'] = appendProcessRowAsComment($rows[$parentIndex]['comments'], $row);
             $hiddenChildren[$index] = true;
         } else {
-            // สินค้าชุด (SETA) → การ์ดแยกพร้อม parent_name + inherit status จาก parent
-            $newCard                        = $row;
-            $newCard['parent_name']         = trim((string)(isset($parentRow['ProductName']) ? $parentRow['ProductName'] : ''));
-            $newCard['comments']            = array();
-            $newCard['TableID']             = $parentRow['TableID'];
-            $newCard['DisplayTableName']    = $parentRow['DisplayTableName'];
-            $newCard['OrderNo']             = $parentRow['OrderNo'];
-            $newCard['SaleModeID']          = $parentRow['SaleModeID'];
-            $newCard['SaleModeName']        = isset($parentRow['SaleModeName']) ? $parentRow['SaleModeName'] : '-';
-            $newCard['SubmitOrderDateTime'] = $parentRow['SubmitOrderDateTime'];
-            // inherit flags พิเศษจาก parent
-            if (!empty($parentRow['is_voided']))   $newCard['is_voided']   = true;
-            if (!empty($parentRow['is_moved']))    { $newCard['is_moved']  = true;  $newCard['moved_to'] = $parentRow['moved_to']; }
-            if (!empty($parentRow['is_combined'])) $newCard['is_combined'] = true;
+            // display_mode จาก parent: 1 = แสดงเฉพาะหัว, 0 = แสดงเฉพาะลูก (default)
+            $displayMode = isset($parentRow['display_mode']) ? (int)$parentRow['display_mode'] : 0;
 
-            $insertsByParent[$parentIndex][] = $newCard;
-            $hiddenParents[$parentIndex]     = true;
-            $hiddenChildren[$index]          = true;
+            if ($displayMode === 1) {
+                // โหมดหัวเดียว: ซ่อนลูก คงหัวไว้ (user checkout ที่การ์ดหัวโดยตรง)
+                $hiddenChildren[$index] = true;
+                // ทำ track ว่าหัวนี้ยังมีลูก active (ใช้ป้องกันหัวหายก่อนเวลา)
+                if (!isset($insertsByParent[$parentIndex])) {
+                    $insertsByParent[$parentIndex] = array();
+                }
+            } else {
+                // โหมดลูก (default): สร้างการ์ดลูก + ซ่อนหัว
+                $newCard                        = $row;
+                $newCard['parent_name']         = trim((string)(isset($parentRow['ProductName']) ? $parentRow['ProductName'] : ''));
+                $newCard['comments']            = array();
+                $newCard['TableID']             = $parentRow['TableID'];
+                $newCard['DisplayTableName']    = $parentRow['DisplayTableName'];
+                $newCard['OrderNo']             = $parentRow['OrderNo'];
+                $newCard['SaleModeID']          = $parentRow['SaleModeID'];
+                $newCard['SaleModeName']        = isset($parentRow['SaleModeName']) ? $parentRow['SaleModeName'] : '-';
+                $newCard['SubmitOrderDateTime'] = $parentRow['SubmitOrderDateTime'];
+                if (!empty($parentRow['is_voided']))   $newCard['is_voided']   = true;
+                if (!empty($parentRow['is_moved']))    { $newCard['is_moved']  = true;  $newCard['moved_to'] = $parentRow['moved_to']; }
+                if (!empty($parentRow['is_combined'])) $newCard['is_combined'] = true;
+
+                $insertsByParent[$parentIndex][] = $newCard;
+                $hiddenParents[$parentIndex]     = true;
+                $hiddenChildren[$index]          = true;
+            }
         }
     }
 
@@ -1234,6 +1248,7 @@ function mergeChildProcessRowsIntoParents($rows)
     foreach ($rows as $index => $row) {
         if (isset($hiddenChildren[$index])) continue;
         if (isset($hiddenParents[$index])) {
+            // โหมดลูก: แสดงการ์ดลูก (ถ้ามี) แล้วข้ามหัว
             if (isset($insertsByParent[$index])) {
                 foreach ($insertsByParent[$index] as $card) {
                     $visibleRows[] = $card;
@@ -1241,6 +1256,19 @@ function mergeChildProcessRowsIntoParents($rows)
             }
             continue;
         }
+
+        // ป้องกันหัว SET (mode 0) โผล่เมื่อลูกทุกตัว checkout แล้ว:
+        // ถ้าหัวไม่ได้ถูก hiddenParents (ไม่มีลูก active ใน result นี้เลย)
+        // และเป็น SET product (ProductSetType = 7) และ display_mode = 0
+        // → ลูกหมดหมดแล้ว ไม่ต้องแสดงหัว
+        $rowProductSetType = isset($row['ProductSetType']) ? (int)$row['ProductSetType'] : 0;
+        $rowParentPid      = isset($row['ParentProcessID']) ? (int)$row['ParentProcessID'] : 0;
+        $rowDisplayMode    = isset($row['display_mode']) ? (int)$row['display_mode'] : 0;
+
+        if ($rowProductSetType === 7 && $rowParentPid === 0 && $rowDisplayMode === 0) {
+            continue;
+        }
+
         $visibleRows[] = $row;
     }
 
@@ -1682,25 +1710,14 @@ function checkoutOne($conn)
         // ถ้า row ที่ checkout เป็นลูก SET → ตรวจว่าเหลือพี่น้อง active อยู่มั้ย
         // ถ้าไม่เหลือ (ลูกตัวสุดท้าย) → auto-checkout พ่อด้วย ป้องกันพ่อโผล่เป็นการ์ดเดี่ยว
         $rowParentProcessId = isset($row['ParentProcessID']) ? (int)$row['ParentProcessID'] : 0;
-        $debugInfo = array(
-            'clicked_process_id'   => $processId,
-            'clicked_parent_pid'   => $rowParentProcessId,
-            'row_printer_id'       => (int)$row['PrinterID'],
-            'row_product_level_id' => (int)$row['ProductLevelID'],
-        );
         if ($rowParentProcessId > 0) {
             $remainingSiblings = fetchLockedChildRows($conn, (int)$row['ProductLevelID'], $rowParentProcessId, (int)$row['PrinterID'], array(PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS));
-            $debugInfo['remaining_siblings_count'] = count($remainingSiblings);
-            $debugInfo['remaining_siblings_pids']  = array_map(function($r){ return (int)$r['ProcessID']; }, $remainingSiblings);
             if (empty($remainingSiblings)) {
                 $parentRows = fetchLockedRowsByProcessId($conn, (int)$row['ProductLevelID'], $rowParentProcessId, (int)$row['PrinterID'], array(PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS));
-                $debugInfo['parent_rows_found'] = count($parentRows);
-                $debugInfo['parent_pids']       = array_map(function($r){ return (int)$r['ProcessID']; }, $parentRows);
                 foreach ($parentRows as $parentRow) {
                     $parentQty = isset($parentRow['ProductAmount']) ? (float)$parentRow['ProductAmount'] : 0;
                     if ($parentQty > 0) {
                         applyCheckoutSplit($conn, $parentRow, 1, $finishStaffId, $now);
-                        $debugInfo['parent_auto_checkedout'] = true;
                     }
                 }
             }
@@ -1712,7 +1729,6 @@ function checkoutOne($conn)
             'success' => true,
             'message' => 'checkout 1 รายการเรียบร้อย',
             'refresh_finished' => true,
-            '_debug' => $debugInfo,
         ));
     } catch (Throwable $e) {
         $conn->rollback();
