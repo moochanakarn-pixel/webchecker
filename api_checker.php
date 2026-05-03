@@ -1682,14 +1682,25 @@ function checkoutOne($conn)
         // ถ้า row ที่ checkout เป็นลูก SET → ตรวจว่าเหลือพี่น้อง active อยู่มั้ย
         // ถ้าไม่เหลือ (ลูกตัวสุดท้าย) → auto-checkout พ่อด้วย ป้องกันพ่อโผล่เป็นการ์ดเดี่ยว
         $rowParentProcessId = isset($row['ParentProcessID']) ? (int)$row['ParentProcessID'] : 0;
+        $debugInfo = array(
+            'clicked_process_id'   => $processId,
+            'clicked_parent_pid'   => $rowParentProcessId,
+            'row_printer_id'       => (int)$row['PrinterID'],
+            'row_product_level_id' => (int)$row['ProductLevelID'],
+        );
         if ($rowParentProcessId > 0) {
             $remainingSiblings = fetchLockedChildRows($conn, (int)$row['ProductLevelID'], $rowParentProcessId, (int)$row['PrinterID'], array(PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS));
+            $debugInfo['remaining_siblings_count'] = count($remainingSiblings);
+            $debugInfo['remaining_siblings_pids']  = array_map(function($r){ return (int)$r['ProcessID']; }, $remainingSiblings);
             if (empty($remainingSiblings)) {
                 $parentRows = fetchLockedRowsByProcessId($conn, (int)$row['ProductLevelID'], $rowParentProcessId, (int)$row['PrinterID'], array(PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS));
+                $debugInfo['parent_rows_found'] = count($parentRows);
+                $debugInfo['parent_pids']       = array_map(function($r){ return (int)$r['ProcessID']; }, $parentRows);
                 foreach ($parentRows as $parentRow) {
                     $parentQty = isset($parentRow['ProductAmount']) ? (float)$parentRow['ProductAmount'] : 0;
                     if ($parentQty > 0) {
                         applyCheckoutSplit($conn, $parentRow, 1, $finishStaffId, $now);
+                        $debugInfo['parent_auto_checkedout'] = true;
                     }
                 }
             }
@@ -1701,6 +1712,7 @@ function checkoutOne($conn)
             'success' => true,
             'message' => 'checkout 1 รายการเรียบร้อย',
             'refresh_finished' => true,
+            '_debug' => $debugInfo,
         ));
     } catch (Throwable $e) {
         $conn->rollback();
