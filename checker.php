@@ -456,7 +456,7 @@ $_ckBase = _computeCheckerBase();
                 <div><h1><?php echo h(APP_TITLE); ?></h1><div id="machineDisplayName" style="margin-top:4px;font-size:12px;opacity:.95;font-weight:bold;display:<?php echo $machineDisplayName !== '' ? 'block' : 'none'; ?>"><?php echo h($machineDisplayName); ?></div></div>
             </div>
             <div class="controls">
-                <button type="button" class="btn btn-accent" id="openSystemSettingsBtn">⚙️ ตั้งค่าระบบ</button>
+                <button type="button" class="btn btn-accent" id="openSystemSettingsBtn" style="display:none">⚙️ ตั้งค่าระบบ</button>
                 <button type="button" class="btn btn-neutral" id="openSoldOutBtn">🥫 ปิดสินค้าหมด</button>
                 <button type="button" class="btn btn-neutral" id="openZoneBtn">📍 โซน: <span id="zoneLabel">ทั้งหมด</span></button>
                 <div class="barcode-tools" id="barcodeTools">
@@ -2392,6 +2392,26 @@ $_ckBase = _computeCheckerBase();
         if (openSystemSettingsBtn) {
             openSystemSettingsBtn.addEventListener('click', openTimerSettings);
         }
+
+        // กด logo 3 ครั้งภายใน 1.5 วินาที เพื่อเปิดตั้งค่าระบบ
+        (function() {
+            const brand = document.querySelector('.brand');
+            if (!brand) return;
+            let tapCount = 0;
+            let tapTimer = null;
+            brand.style.cursor = 'default';
+            brand.addEventListener('click', function() {
+                tapCount++;
+                if (tapCount === 1) {
+                    tapTimer = setTimeout(function() { tapCount = 0; }, 1500);
+                }
+                if (tapCount >= 3) {
+                    clearTimeout(tapTimer);
+                    tapCount = 0;
+                    openTimerSettings();
+                }
+            });
+        })();
         const barcodeInput = document.getElementById('barcodeInput');
         if (barcodeInput) {
             // มือถือ = inputmode none กัน keyboard เปิด
