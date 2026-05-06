@@ -746,7 +746,7 @@ $_ckBase = _computeCheckerBase();
         let isSubmitting = false;
         let noticeTimer = null;
         let activeRefreshTick = 0;
-        let staffIsLoggedIn = false;
+        var staffIsLoggedIn = false; // var เพราะต้องแชร์ข้าม <script> block กับ staff login IIFE
 
         const state = {
             stats: { active_rows: 0, active_qty: 0, recent_finished_rows: 0 },
@@ -1554,7 +1554,7 @@ $_ckBase = _computeCheckerBase();
                 sound_enabled: document.getElementById('soundEnabled').checked ? 1 : 0,
                 barcode_camera_enabled: document.getElementById('barcodeCameraEnabled').checked ? 1 : 0,
                 kds_two_step_checkout: document.getElementById('kdsTwoStepCheckout').checked ? 1 : 0,
-                zone_lock: document.getElementById('kdsZoneLock').checked ? 1 : 0
+                zone_lock: (document.getElementById('kdsZoneLock') || {}).checked ? 1 : 0
             };
         }
 
