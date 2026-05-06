@@ -467,7 +467,7 @@ $_ckBase = _computeCheckerBase();
                     <button type="button" class="btn btn-neutral" id="openBarcodeCameraBtn">📷 สแกนกล้อง</button>
                 </div>
                 <div id="staffLoginArea" style="display:flex;align-items:center;gap:6px">
-                    <input type="text" id="topStaffCodeInput" placeholder="Staff Code" autocomplete="off" style="text-transform:uppercase;width:110px;padding:6px 10px;border:1px solid var(--line,#e5e7eb);border-radius:8px;font-size:13px;background:#fff;color:#111">
+                    <input type="text" id="topStaffCodeInput" placeholder="Staff Code" autocomplete="off" style="text-transform:uppercase;width:110px;padding:6px 10px;border:1px solid var(--line,#e5e7eb);border-radius:8px;font-size:16px;background:#fff;color:#111">
                     <button type="button" class="btn btn-primary" id="topStaffLoginBtn" style="min-height:36px;padding:0 12px;font-size:13px">เข้าสู่ระบบ</button>
                 </div>
                 <div id="staffLoggedArea" style="display:none;align-items:center;gap:6px">
