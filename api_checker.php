@@ -231,7 +231,8 @@ function lookupStaffDisplayNameByConnection($conn, $staffId)
 
 function writeSystemSettingsFile($settings)
 {
-    $existing = getLocalSettings();
+    $settingsPath = resolveKdsSettingsPath();
+    $existing = is_file($settingsPath) ? (require $settingsPath) : array();
     if (!is_array($existing)) {
         $existing = array();
     }
