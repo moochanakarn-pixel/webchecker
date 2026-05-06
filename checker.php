@@ -466,6 +466,14 @@ $_ckBase = _computeCheckerBase();
                     </div>
                     <button type="button" class="btn btn-neutral" id="openBarcodeCameraBtn">📷 สแกนกล้อง</button>
                 </div>
+                <div id="staffLoginArea" style="display:flex;align-items:center;gap:6px">
+                    <input type="text" id="topStaffCodeInput" placeholder="Staff Code" autocomplete="off" style="text-transform:uppercase;width:110px;padding:6px 10px;border:1px solid var(--line,#e5e7eb);border-radius:8px;font-size:13px;background:#fff;color:#111">
+                    <button type="button" class="btn btn-primary" id="topStaffLoginBtn" style="min-height:36px;padding:0 12px;font-size:13px">เข้าสู่ระบบ</button>
+                </div>
+                <div id="staffLoggedArea" style="display:none;align-items:center;gap:6px">
+                    <span id="topStaffNameLabel" style="font-size:13px;font-weight:bold;color:#fff;background:rgba(0,0,0,.18);padding:4px 10px;border-radius:8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+                    <button type="button" class="btn btn-ghost" id="topStaffLogoutBtn" style="min-height:36px;padding:0 10px;font-size:13px">ออกจากระบบ</button>
+                </div>
                 <button type="button" class="btn btn-ghost js-open-finished" id="openFinishedBtn">✅ เสร็จแล้ว <span id="topFinishedCount">0</span></button>
                 <button type="button" class="btn btn-primary" id="refreshBtn">🔄 รีเฟรช</button>
                 <button type="button" class="btn-fullscreen" id="fsBtn" title="เต็มจอ">
@@ -2831,6 +2839,71 @@ $_ckBase = _computeCheckerBase();
 
         // โหลด zones ตอนเริ่ม
         loadZones();
+    })();
+
+    // ── Staff Login (topbar) ─────────────────────────────
+    (function(){
+        const loginArea   = document.getElementById('staffLoginArea');
+        const loggedArea  = document.getElementById('staffLoggedArea');
+        const codeInput   = document.getElementById('topStaffCodeInput');
+        const loginBtn    = document.getElementById('topStaffLoginBtn');
+        const logoutBtn   = document.getElementById('topStaffLogoutBtn');
+        const nameLabel   = document.getElementById('topStaffNameLabel');
+        if (!loginArea) return;
+
+        function showLoggedIn(name) {
+            nameLabel.textContent = '👤 ' + name;
+            loginArea.style.display = 'none';
+            loggedArea.style.display = 'flex';
+        }
+        function showLoggedOut() {
+            codeInput.value = '';
+            loginArea.style.display = 'flex';
+            loggedArea.style.display = 'none';
+        }
+
+        function doLogin() {
+            const code = codeInput.value.trim().toUpperCase();
+            if (!code) { showNotice('กรุณากรอก Staff Code', 'error'); return; }
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'กำลังค้นหา...';
+            kdsApiFetch(_kdsBase + '/api_checker.php?action=lookup_staff_by_code&staff_code=' + encodeURIComponent(code) + '&_=' + Date.now(), { cache: 'no-store' })
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+                if (d.success) {
+                    localStorage.setItem('checker_finish_staff_id', String(d.staff_id));
+                    showLoggedIn(d.staff_name);
+                    showNotice('เข้าสู่ระบบแล้ว: ' + d.staff_name, 'success');
+                } else {
+                    showNotice(d.error || 'ไม่พบพนักงาน', 'error');
+                }
+            })
+            .catch(function(){ showNotice('เกิดข้อผิดพลาด', 'error'); })
+            .finally(function(){
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'เข้าสู่ระบบ';
+            });
+        }
+
+        loginBtn.addEventListener('click', doLogin);
+        codeInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') doLogin(); });
+
+        logoutBtn.addEventListener('click', function(){
+            localStorage.setItem('checker_finish_staff_id', String(defaultFinishStaffId));
+            showLoggedOut();
+            showNotice('ออกจากระบบแล้ว', 'success');
+        });
+
+        // โหลดชื่อพนักงานที่ login อยู่เดิม
+        const savedId = localStorage.getItem('checker_finish_staff_id');
+        if (savedId && parseInt(savedId) > 0 && parseInt(savedId) !== defaultFinishStaffId) {
+            kdsApiFetch(_kdsBase + '/api_checker.php?action=lookup_staff_name&staff_id=' + savedId + '&_=' + Date.now(), { cache: 'no-store' })
+            .then(function(r){ return r.json(); })
+            .then(function(d){ if (d.success && d.staff_name) showLoggedIn(d.staff_name); else showLoggedOut(); })
+            .catch(function(){ showLoggedOut(); });
+        } else {
+            showLoggedOut();
+        }
     })();
 
     // ── Staff Code Lookup ────────────────────────────────
