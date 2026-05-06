@@ -2920,6 +2920,7 @@ $_ckBase = _computeCheckerBase();
             .then(function(d){
                 if (d.success) {
                     localStorage.setItem('checker_finish_staff_id', String(d.staff_id));
+                    localStorage.setItem('checker_staff_logged_in', '1');
                     showLoggedIn(d.staff_name);
                     showNotice('เข้าสู่ระบบแล้ว: ' + d.staff_name, 'success');
                 } else {
@@ -2938,17 +2939,18 @@ $_ckBase = _computeCheckerBase();
 
         logoutBtn.addEventListener('click', function(){
             localStorage.setItem('checker_finish_staff_id', String(defaultFinishStaffId));
+            localStorage.setItem('checker_staff_logged_in', '0');
             showLoggedOut();
             showNotice('ออกจากระบบแล้ว', 'success');
         });
 
-        // โหลดชื่อพนักงานที่ login อยู่เดิม
-        const savedId = localStorage.getItem('checker_finish_staff_id');
-        if (savedId && parseInt(savedId) > 0 && parseInt(savedId) !== defaultFinishStaffId) {
+        // โหลดชื่อพนักงานที่ login อยู่เดิม (ใช้ flag แยกต่างหาก ไม่ขึ้นกับค่า default staff id)
+        const savedId  = localStorage.getItem('checker_finish_staff_id');
+        const wasLoggedIn = localStorage.getItem('checker_staff_logged_in') === '1';
+        if (wasLoggedIn && savedId && parseInt(savedId) > 0) {
             kdsApiFetch(_kdsBase + '/api_checker.php?action=lookup_staff_name&staff_id=' + savedId + '&_=' + Date.now(), { cache: 'no-store' })
             .then(function(r){ return r.json(); })
             .then(function(d){
-                // ถ้าผู้ใช้พิมพ์ไปแล้วระหว่างรอ ไม่ต้อง override
                 if (codeInput.value.trim() !== '') return;
                 if (d.success && d.staff_name) showLoggedIn(d.staff_name); else showLoggedOut();
             })
