@@ -142,7 +142,9 @@ function validateSystemSettingsPayload($settings)
 
 function systemSettingsSnapshot()
 {
-    $local = getLocalSettings();
+    $settingsPath = resolveKdsSettingsPath();
+    $local = is_file($settingsPath) ? (require $settingsPath) : array();
+    if (!is_array($local)) $local = array();
     $db = getDbConfig();
     return array(
         'db_host' => (string)localSetting($local, 'db_host', $db['host']),
