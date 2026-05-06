@@ -2,7 +2,7 @@
 
 ระบบ Kitchen Display System (KDS) สำหรับแสดงคิวอาหารในครัว รองรับการ checkout, สแกนบาร์โค้ด และควบคุมสินค้าหมด
 
-**เวอร์ชันปัจจุบัน:** v1.4.2
+**เวอร์ชันปัจจุบัน:** v1.5.0
 
 ---
 
@@ -69,6 +69,8 @@ return [
 - **Sound alert** — แจ้งเตือนเสียงเมื่อมี order ใหม่
 - **Screen lock** — ล็อคหน้าจอเมื่อไม่ใช้งาน รองรับหลายเครื่องพร้อมกัน
 - **Multi-KDS** — ติดตั้งหลายจุดในโฟลเดอร์ย่อย (`KDS_TEMPLATE/`) บน IIS
+- **Staff login บน topbar** — กรอกรหัสพนักงานได้จากหน้าหลัก บังคับ login ก่อน checkout ทุกช่องทาง
+- **Zone lock** — ล็อคโซนไม่ให้เปลี่ยนโดยไม่ตั้งใจ ตั้งค่าผ่าน settings modal; จำโซนที่เลือกข้ามรอบ refresh
 
 ---
 
@@ -78,6 +80,9 @@ return [
 
 | เวอร์ชัน | รายการ |
 |---|---|
+| v1.5.0 | บังคับ login ก่อน checkout |
+| v1.5.0 | Zone lock — ซ่อนปุ่มเปลี่ยนโซนเมื่อ lock |
+| v1.5.0 | จำโซนข้ามรอบ refresh ด้วย localStorage |
 | v1.4.2 | SQL injection ใน `tableExists()` |
 | v1.4.2 | `strtotime()` บนค่า null |
 | v1.4.2 | Missing `isset()` ใน insert row |

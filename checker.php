@@ -662,6 +662,13 @@ $_ckBase = _computeCheckerBase();
                         </div>
                         <input type="checkbox" id="kdsTwoStepCheckout">
                     </label>
+                    <label class="setting-check">
+                        <div>
+                            <div class="setting-check-title">ล็อคโซน</div>
+                            <div class="setting-check-sub">ซ่อนปุ่มเปลี่ยนโซน — โซนที่เลือกไว้จะไม่ถูกเปลี่ยนโดยไม่ตั้งใจ</div>
+                        </div>
+                        <input type="checkbox" id="kdsZoneLock">
+                    </label>
                 </div>
             </div>
         </div>
@@ -739,6 +746,7 @@ $_ckBase = _computeCheckerBase();
         let isSubmitting = false;
         let noticeTimer = null;
         let activeRefreshTick = 0;
+        var staffIsLoggedIn = false; // var เพราะต้องแชร์ข้าม <script> block กับ staff login IIFE
 
         const state = {
             stats: { active_rows: 0, active_qty: 0, recent_finished_rows: 0 },
@@ -1515,6 +1523,8 @@ $_ckBase = _computeCheckerBase();
             document.getElementById('soundEnabledLabel').textContent = document.getElementById('soundEnabled').checked ? 'เปิดอยู่' : 'ปิดอยู่';
             const twoStepInput = document.getElementById('kdsTwoStepCheckout');
             if (twoStepInput) twoStepInput.checked = Number(settings.kds_two_step_checkout || 0) === 1;
+            const zoneLockInput = document.getElementById('kdsZoneLock');
+            if (zoneLockInput) zoneLockInput.checked = Number(settings.zone_lock || 0) === 1;
             const cameraEnabledInput = document.getElementById('barcodeCameraEnabled');
             if (cameraEnabledInput) {
                 cameraEnabledInput.checked = Number(settings.barcode_camera_enabled || 0) === 1;
@@ -1543,7 +1553,8 @@ $_ckBase = _computeCheckerBase();
                 threshold_red: Number(document.getElementById('thresholdRed').value || 0),
                 sound_enabled: document.getElementById('soundEnabled').checked ? 1 : 0,
                 barcode_camera_enabled: document.getElementById('barcodeCameraEnabled').checked ? 1 : 0,
-                kds_two_step_checkout: document.getElementById('kdsTwoStepCheckout').checked ? 1 : 0
+                kds_two_step_checkout: document.getElementById('kdsTwoStepCheckout').checked ? 1 : 0,
+                zone_lock: (document.getElementById('kdsZoneLock') || {}).checked ? 1 : 0
             };
         }
 
@@ -1609,6 +1620,7 @@ $_ckBase = _computeCheckerBase();
             soundSettings.enabled = !!payload.sound_enabled;
             state.kdsTwoStepCheckout = !!payload.kds_two_step_checkout;
             applyBarcodeCameraAvailability();
+            applyZoneLock(!!payload.zone_lock);
             setStaffNameBox(staffName || '');
         }
 
@@ -2100,6 +2112,7 @@ $_ckBase = _computeCheckerBase();
 
         async function checkoutOne(productLevelId, processId, subProcessId, printerId) {
             if (isSubmitting) return;
+            if (!staffIsLoggedIn) { showNotice('กรุณาเข้าสู่ระบบก่อน', 'error'); return; }
             const clickedRow = findActiveRow(productLevelId, processId, subProcessId, printerId);
             if (!clickedRow) {
                 await loadActiveRows();
@@ -2193,6 +2206,7 @@ $_ckBase = _computeCheckerBase();
 
         async function checkoutBarcode() {
             if (!barcodeCheckoutEnabled || isSubmitting) return;
+            if (!staffIsLoggedIn) { showNotice('กรุณาเข้าสู่ระบบก่อน', 'error'); return; }
             const input = document.getElementById('barcodeInput');
             if (!input) return;
             const barcode = String(input.value || '').trim();
@@ -2247,6 +2261,7 @@ $_ckBase = _computeCheckerBase();
 
         async function resolveStatus(productLevelId, processId, subProcessId, printerId) {
             if (isSubmitting) return;
+            if (!staffIsLoggedIn) { showNotice('กรุณาเข้าสู่ระบบก่อน', 'error'); return; }
             const clickedRow = findActiveRow(productLevelId, processId, subProcessId, printerId);
             if (!clickedRow) {
                 await loadActiveRows();
@@ -2629,6 +2644,11 @@ $_ckBase = _computeCheckerBase();
         initSoundSettings();
         initSoundUI();
         initBarcodeSettings();
+        // โหลด zone_lock จาก settings เพื่อซ่อน/แสดงปุ่มเปลี่ยนโซน
+        kdsApiFetch(_kdsBase + '/api_checker.php?action=get_system_settings&_=' + Date.now(), { cache: 'no-store' })
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if (d.success) applyZoneLock(!!d.settings.zone_lock); })
+        .catch(function(){});
         loadAll().then(function() {
             focusBarcodeInput();
             // auto-open กล้องถ้า barcode_camera_enabled = 1
@@ -2753,6 +2773,11 @@ $_ckBase = _computeCheckerBase();
                 el.style.display = cachedZoneTableIds.has(tid) ? '' : 'none';
             });
         }
+    window.applyZoneLock = function(locked) {
+        const btn = document.getElementById('openZoneBtn');
+        if (btn) btn.style.display = locked ? 'none' : '';
+    };
+
     (function(){
         let currentZoneId = 0;
         let currentZoneName = 'ทั้งหมด';
@@ -2834,10 +2859,24 @@ $_ckBase = _computeCheckerBase();
                 currentZoneId   = parseInt(btn.dataset.zoneid);
                 currentZoneName = currentZoneId === 0 ? 'ทั้งหมด' : btn.textContent.replace('📍 ', '').trim();
                 if (zoneLabel) zoneLabel.textContent = currentZoneName;
+                localStorage.setItem('checker_zone_id', String(currentZoneId));
+                localStorage.setItem('checker_zone_name', currentZoneName);
                 closeZoneModal();
                 applyZoneFilter();
             });
         }
+
+        // คืนค่า zone จาก localStorage (จำ zone ข้ามรอบ refresh)
+        (function restoreZone(){
+            const savedId = parseInt(localStorage.getItem('checker_zone_id') || '0');
+            const savedName = localStorage.getItem('checker_zone_name') || 'ทั้งหมด';
+            if (savedId > 0) {
+                currentZoneId   = savedId;
+                currentZoneName = savedName;
+                if (zoneLabel) zoneLabel.textContent = currentZoneName;
+                filterCardsByZone(currentZoneId);
+            }
+        })();
 
         // โหลด zones ตอนเริ่ม
         loadZones();
@@ -2854,11 +2893,13 @@ $_ckBase = _computeCheckerBase();
         if (!loginArea) return;
 
         function showLoggedIn(name) {
+            staffIsLoggedIn = true;
             nameLabel.textContent = '👤 ' + name;
             loginArea.style.display = 'none';
             loggedArea.style.display = 'flex';
         }
         function showLoggedOut() {
+            staffIsLoggedIn = false;
             codeInput.value = '';
             loginArea.style.display = 'flex';
             loggedArea.style.display = 'none';
