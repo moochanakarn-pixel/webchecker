@@ -2775,7 +2775,12 @@ $_ckBase = _computeCheckerBase();
         }
     window.applyZoneLock = function(locked) {
         const btn = document.getElementById('openZoneBtn');
-        if (btn) btn.style.display = locked ? 'none' : '';
+        if (!btn) return;
+        btn.disabled = locked;
+        btn.style.opacity = locked ? '0.45' : '';
+        btn.style.cursor  = locked ? 'default' : '';
+        btn.style.pointerEvents = locked ? 'none' : '';
+        btn.title = locked ? 'โซนถูกล็อค — เปลี่ยนได้ในหน้าตั้งค่า' : '';
     };
 
     (function(){

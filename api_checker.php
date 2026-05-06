@@ -251,6 +251,7 @@ function writeSystemSettingsFile($settings)
         'sound_enabled' => !empty($settings['sound_enabled']) ? 1 : 0,
         'barcode_camera_enabled' => !empty($settings['barcode_camera_enabled']) ? 1 : 0,
         'kds_two_step_checkout' => !empty($settings['kds_two_step_checkout']) ? 1 : 0,
+        'zone_lock' => !empty($settings['zone_lock']) ? 1 : 0,
     ));
 
     $content = "<?php\nreturn " . var_export($next, true) . ";\n";
