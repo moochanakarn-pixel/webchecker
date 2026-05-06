@@ -1506,7 +1506,9 @@ $_ckBase = _computeCheckerBase();
                     shopNameEl.textContent = parts.length > 1 ? parts[1] : selOpt.textContent;
                 }
             }
-            document.getElementById('settingsFinishStaffId').value = Number(settings.finish_staff_id || 0) || '';
+            // ใช้ค่าจาก localStorage ก่อน (อาจ login จาก topbar) ถ้าไม่มีค่อยใช้จาก settings
+            const localStaffId = Number(localStorage.getItem('checker_finish_staff_id') || 0);
+            document.getElementById('settingsFinishStaffId').value = (localStaffId > 0 ? localStaffId : Number(settings.finish_staff_id || 0)) || '';
             document.getElementById('thresholdYellow').value = Number(settings.threshold_yellow || thresholdYellowDefault || 10);
             document.getElementById('thresholdRed').value = Number(settings.threshold_red || thresholdRedDefault || 20);
             document.getElementById('soundEnabled').checked = Number(settings.sound_enabled || 0) === 1;
@@ -2899,8 +2901,12 @@ $_ckBase = _computeCheckerBase();
         if (savedId && parseInt(savedId) > 0 && parseInt(savedId) !== defaultFinishStaffId) {
             kdsApiFetch(_kdsBase + '/api_checker.php?action=lookup_staff_name&staff_id=' + savedId + '&_=' + Date.now(), { cache: 'no-store' })
             .then(function(r){ return r.json(); })
-            .then(function(d){ if (d.success && d.staff_name) showLoggedIn(d.staff_name); else showLoggedOut(); })
-            .catch(function(){ showLoggedOut(); });
+            .then(function(d){
+                // ถ้าผู้ใช้พิมพ์ไปแล้วระหว่างรอ ไม่ต้อง override
+                if (codeInput.value.trim() !== '') return;
+                if (d.success && d.staff_name) showLoggedIn(d.staff_name); else showLoggedOut();
+            })
+            .catch(function(){ if (codeInput.value.trim() === '') showLoggedOut(); });
         } else {
             showLoggedOut();
         }
