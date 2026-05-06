@@ -2005,7 +2005,7 @@ function buildCheckoutPrintServerPayload($row, $printerName, $finishStaffId, $fi
         : '-';
     $orderNo = isset($row['OrderNo']) ? (int)$row['OrderNo'] : 0;
     $submitTime = !empty($row['SubmitOrderDateTime']) ? strtotime((string)$row['SubmitOrderDateTime']) : false;
-    $finishedTime = strtotime((string)$finishedAt);
+    $finishedTime = !empty($finishedAt) ? strtotime((string)$finishedAt) : false;
 
     $lines = array();
     $lines[] = 'CHECKOUT';
@@ -2278,13 +2278,14 @@ function tableExists($conn, $tableName)
         return $cache[$tableName];
     }
 
-    $safeTable = $conn->real_escape_string((string)$tableName);
-    $sql = "SHOW TABLES LIKE '" . $safeTable . "'";
-    $result = $conn->query($sql);
-    $exists = ($result instanceof mysqli_result) && ($result->num_rows > 0);
-    if ($result instanceof mysqli_result) {
-        $result->free();
-    }
+    $dbName = $conn->query("SELECT DATABASE()")->fetch_row()[0];
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?");
+    $stmt->bind_param('ss', $dbName, $tableName);
+    $stmt->execute();
+    $stmt->bind_result($count);
+    $stmt->fetch();
+    $stmt->close();
+    $exists = $count > 0;
     $cache[$tableName] = $exists;
     return $exists;
 }
@@ -2548,12 +2549,12 @@ function applyCheckoutSplit($conn, $row, $qtyToFinish, $finishStaffId, $now)
     $insertProductAmount = $finishQty;
     $insertProductSetType = (int)$row['ProductSetType'];
     $insertSubmitOrderStaffId = (int)$row['SubmitOrderStaffID'];
-    $insertSubmitOrderDateTime = $row['SubmitOrderDateTime'] !== null ? (string)$row['SubmitOrderDateTime'] : null;
+    $insertSubmitOrderDateTime = isset($row['SubmitOrderDateTime']) && $row['SubmitOrderDateTime'] !== null ? (string)$row['SubmitOrderDateTime'] : null;
     $insertFinishStaffId = (int)$finishStaffId;
     $insertFinishDateTime = $now;
     $insertPrinterId = (int)$row['PrinterID'];
     $insertOrderNo = (int)$row['OrderNo'];
-    $insertOrderDate = $row['OrderDate'] !== null ? (string)$row['OrderDate'] : null;
+    $insertOrderDate = isset($row['OrderDate']) && $row['OrderDate'] !== null ? (string)$row['OrderDate'] : null;
     $insertTableId = (int)$row['TableID'];
     $insertDisplayTableName = $row['DisplayTableName'] !== null ? (string)$row['DisplayTableName'] : '';
     $insertIsMoveOrder = (int)$row['IsMoveOrder'];

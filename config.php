@@ -61,7 +61,7 @@ define('PROCESS_STATUS_RESOLVED', 4);
 
 // Performance filter
 define('ACTIVE_ROWS_TODAY_ONLY', false);
-define('FINISHED_ROWS_TODAY_ONLY', false);
+define('FINISHED_ROWS_TODAY_ONLY', true);
 
 // =============================
 // Secret / DB configuration
