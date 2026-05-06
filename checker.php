@@ -1034,6 +1034,7 @@ $_ckBase = _computeCheckerBase();
         }
 
         async function openBarcodeCamera() {
+            if (state.barcodeCameraOpen) return;
             if (!getBarcodeCameraEnabled()) {
                 showNotice('ปิดปุ่มสแกนกล้องอยู่ในตั้งค่า', 'error');
                 return;
@@ -1352,6 +1353,7 @@ $_ckBase = _computeCheckerBase();
                     throw new Error(data.error || 'โหลดรายการสินค้าไม่สำเร็จ');
                 }
                 state.soldOutProducts = Array.isArray(data.rows) ? data.rows : [];
+                if (!state.soldOutModalOpen) return;
                 renderSoldOutProducts(state.soldOutProducts);
             } catch (error) {
                 if (list) list.innerHTML = '<div class="empty">โหลดรายการสินค้าไม่สำเร็จ</div>';
@@ -2311,7 +2313,7 @@ $_ckBase = _computeCheckerBase();
             noticeTimer = setTimeout(function() {
                 box.className = 'notice';
                 box.textContent = '';
-            }, 2600);
+            }, 3500);
         }
 
         function formatQty(value) {
@@ -2578,9 +2580,13 @@ $_ckBase = _computeCheckerBase();
         setInterval(function() {
             if (isSubmitting) return;
             activeRefreshTick += 1;
-            loadActiveRows();
-            if (state.finishedDrawerOpen || activeRefreshTick % finishedRefreshEvery === 0) {
-                loadFinishedRows();
+            try {
+                loadActiveRows();
+                if (state.finishedDrawerOpen || activeRefreshTick % finishedRefreshEvery === 0) {
+                    loadFinishedRows();
+                }
+            } catch (e) {
+                console.warn('auto-refresh error', e);
             }
         }, refreshMs);
     </script>
