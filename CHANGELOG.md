@@ -2,6 +2,15 @@
 
 ---
 
+## v1.4.2 — 2026-05-06
+
+### 🐛 Bug Fixes
+- **[Security] SQL Injection ใน `tableExists()`** — เปลี่ยนจาก `SHOW TABLES LIKE` + `real_escape_string()` เป็น `information_schema.TABLES` + prepared statement
+- **[API] `strtotime()` บนค่าว่าง** — เพิ่ม guard ใน `buildCheckoutPrintServerPayload()` กัน PHP warning เมื่อ `finishedAt` เป็น null หรือว่าง
+- **[API] Missing `isset()`** — เพิ่ม `isset()` ก่อน access `SubmitOrderDateTime` และ `OrderDate` ใน insert row
+
+---
+
 ## v1.4.1 — 2026-05-06
 
 ### 🐛 Bug Fixes
