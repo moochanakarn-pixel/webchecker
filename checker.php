@@ -1669,6 +1669,7 @@ $_ckBase = _computeCheckerBase();
             renderActiveRows(state.active_rows || []);
             renderRecentFinished(state.recent_finished_rows || []);
             syncDrawerState();
+            applyZoneFilterSync();
         }
         function renderFilterInfo() {
         }
@@ -2683,6 +2684,16 @@ $_ckBase = _computeCheckerBase();
     })();
 
     // ── Zone Filter ─────────────────────────────────────
+        // cache table IDs ของ zone ที่เลือกไว้ ใช้กรองหลัง render โดยไม่ต้องยิง API ซ้ำ
+        let cachedZoneTableIds = null; // null = ทั้งหมด, Set = กรองตาม zone
+
+        function applyZoneFilterSync() {
+            if (cachedZoneTableIds === null) return;
+            document.querySelectorAll('article[data-table-id]').forEach(function(el) {
+                const tid = parseInt(el.dataset.tableId || '0');
+                el.style.display = cachedZoneTableIds.has(tid) ? '' : 'none';
+            });
+        }
     (function(){
         let currentZoneId = 0;
         let currentZoneName = 'ทั้งหมด';
@@ -2717,7 +2728,7 @@ $_ckBase = _computeCheckerBase();
         // filter cards ตาม zone
         function applyZoneFilter() {
             if (currentZoneId === 0) {
-                // แสดงทั้งหมด
+                cachedZoneTableIds = null;
                 document.querySelectorAll('article[data-table-id]').forEach(function(el){
                     el.style.display = '';
                 });
@@ -2731,11 +2742,8 @@ $_ckBase = _computeCheckerBase();
             .then(function(r){ return r.json(); })
             .then(function(d){
                 if (!d.success || !d.table_ids) return;
-                const allowed = new Set(d.table_ids.map(Number));
-                document.querySelectorAll('article[data-table-id]').forEach(function(el){
-                    const tid = parseInt(el.dataset.tableId || '0');
-                    el.style.display = allowed.has(tid) ? '' : 'none';
-                });
+                cachedZoneTableIds = new Set(d.table_ids.map(Number));
+                applyZoneFilterSync();
             }).catch(function(e){ console.warn('zone filter error', e); });
         }
 
