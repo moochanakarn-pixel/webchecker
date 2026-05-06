@@ -456,7 +456,7 @@ $_ckBase = _computeCheckerBase();
                 <div><h1><?php echo h(APP_TITLE); ?></h1><div id="machineDisplayName" style="margin-top:4px;font-size:12px;opacity:.95;font-weight:bold;display:<?php echo $machineDisplayName !== '' ? 'block' : 'none'; ?>"><?php echo h($machineDisplayName); ?></div></div>
             </div>
             <div class="controls">
-                <button type="button" class="btn btn-accent" id="openSystemSettingsBtn">⚙️ ตั้งค่าระบบ</button>
+                <button type="button" class="btn btn-accent" id="openSystemSettingsBtn" style="display:none">⚙️ ตั้งค่าระบบ</button>
                 <button type="button" class="btn btn-neutral" id="openSoldOutBtn">🥫 ปิดสินค้าหมด</button>
                 <button type="button" class="btn btn-neutral" id="openZoneBtn">📍 โซน: <span id="zoneLabel">ทั้งหมด</span></button>
                 <div class="barcode-tools" id="barcodeTools">
@@ -1101,9 +1101,10 @@ $_ckBase = _computeCheckerBase();
         // ── เสียงแจ้งเตือน ──
         const soundSettings = {
             enabled: false,
-            audioBuffer: null,   // AudioBuffer จากไฟล์ที่ upload
+            audioBuffer: null,
             audioCtx: null,
-            lastKnownProcessIds: null  // set ของ ProcessID ที่รู้จักแล้ว
+            lastKnownProcessIds: null,
+            _pendingRaw: null        // raw ArrayBuffer รอ decode เมื่อ AudioContext พร้อม
         };
 
         function getAudioCtx() {
@@ -1224,15 +1225,43 @@ $_ckBase = _computeCheckerBase();
                 req.onsuccess = function() {
                     const rec = req.result;
                     if (!rec) return;
-                    getAudioCtx().decodeAudioData(rec.buffer.slice(0), function(buf) {
-                        soundSettings.audioBuffer = buf;
-                        document.getElementById('soundFileName').textContent = rec.name;
-                        document.getElementById('soundFileName').className = 'sound-name loaded';
-                        document.getElementById('soundPreviewBtn').disabled = false;
-                        document.getElementById('soundClearBtn').style.display = '';
-                    });
+                    soundSettings._pendingRaw = rec;
+                    _tryDecodeSoundCache();
                 };
             } catch(e) { console.warn('loadCachedSound', e); }
+        }
+
+        function _tryDecodeSoundCache() {
+            if (!soundSettings._pendingRaw || soundSettings.audioBuffer) return;
+            const rec = soundSettings._pendingRaw;
+            const ctx = getAudioCtx();
+            const doDecode = function() {
+                ctx.decodeAudioData(rec.buffer.slice(0), function(buf) {
+                    // ก่อน set audioBuffer ให้ init lastKnownProcessIds ก่อน ป้องกันเสียงดังทุก order
+                    if (soundSettings.lastKnownProcessIds === null) {
+                        soundSettings.lastKnownProcessIds = new Set((state.active_rows || []).map(function(r) { return String(r.ProcessID); }));
+                    }
+                    soundSettings.audioBuffer = buf;
+                    soundSettings._pendingRaw = null;
+                    document.getElementById('soundFileName').textContent = rec.name;
+                    document.getElementById('soundFileName').className = 'sound-name loaded';
+                    document.getElementById('soundPreviewBtn').disabled = false;
+                    document.getElementById('soundClearBtn').style.display = '';
+                }, function(err) {
+                    console.warn('decodeAudioData failed', err);
+                });
+            };
+            if (ctx.state === 'suspended') {
+                ctx.resume().then(doDecode).catch(function() {
+                    // resume ไม่ได้ก่อน user interaction — retry เมื่อ user กด
+                    document.addEventListener('click', function onFirstClick() {
+                        document.removeEventListener('click', onFirstClick);
+                        _tryDecodeSoundCache();
+                    }, { once: true });
+                });
+            } else {
+                doDecode();
+            }
         }
         async function clearSoundCache() {
             try {
@@ -2392,6 +2421,26 @@ $_ckBase = _computeCheckerBase();
         if (openSystemSettingsBtn) {
             openSystemSettingsBtn.addEventListener('click', openTimerSettings);
         }
+
+        // กด logo 3 ครั้งภายใน 1.5 วินาที เพื่อเปิดตั้งค่าระบบ
+        (function() {
+            const brand = document.querySelector('.brand');
+            if (!brand) return;
+            let tapCount = 0;
+            let tapTimer = null;
+            brand.style.cursor = 'default';
+            brand.addEventListener('click', function() {
+                tapCount++;
+                if (tapCount === 1) {
+                    tapTimer = setTimeout(function() { tapCount = 0; }, 1500);
+                }
+                if (tapCount >= 3) {
+                    clearTimeout(tapTimer);
+                    tapCount = 0;
+                    openTimerSettings();
+                }
+            });
+        })();
         const barcodeInput = document.getElementById('barcodeInput');
         if (barcodeInput) {
             // มือถือ = inputmode none กัน keyboard เปิด
