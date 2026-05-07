@@ -138,8 +138,8 @@ if (-not $existingHandler) {
 # ─────────────────────────────────────────────────────────────
 Write-Step "ตั้งค่า Port สำหรับ KDS"
 
-$portInput = Read-Host "   ใช้ port ไหน? (กด Enter = 8080 — ไม่ชนกับ POS port 80)"
-$port = if ($portInput -match '^\d+$') { [int]$portInput } else { 8080 }
+$portInput = Read-Host "   ใช้ port ไหน? (กด Enter = 80)"
+$port = if ($portInput -match '^\d+$') { [int]$portInput } else { 80 }
 
 # เพิ่ม binding port นี้ให้ Default Web Site (ถ้ายังไม่มี)
 $siteName = "Default Web Site"
