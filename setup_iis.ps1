@@ -134,14 +134,29 @@ if (-not $existingHandler) {
 }
 
 # ─────────────────────────────────────────────────────────────
-# 6. เปิด Firewall Port
+# 6. เพิ่ม IIS Site Binding
+# ─────────────────────────────────────────────────────────────
+Write-Step "ตั้งค่า Port สำหรับ KDS"
+
+$portInput = Read-Host "   ใช้ port ไหน? (กด Enter = 8080 — ไม่ชนกับ POS port 80)"
+$port = if ($portInput -match '^\d+$') { [int]$portInput } else { 8080 }
+
+# เพิ่ม binding port นี้ให้ Default Web Site (ถ้ายังไม่มี)
+$siteName = "Default Web Site"
+$existingBinding = Get-WebBinding -Name $siteName -Protocol "http" -Port $port -ErrorAction SilentlyContinue
+if (-not $existingBinding) {
+    New-WebBinding -Name $siteName -Protocol "http" -Port $port -IPAddress "*"
+    Write-OK "เพิ่ม IIS binding port $port ให้ '$siteName' แล้ว"
+} else {
+    Write-Skip "IIS binding port $port มีอยู่แล้ว"
+}
+
+# ─────────────────────────────────────────────────────────────
+# 7. เปิด Firewall Port
 # ─────────────────────────────────────────────────────────────
 Write-Step "ตั้งค่า Windows Firewall"
 
-$portInput = Read-Host "   เปิด port ไหนให้ tablet เข้าถึงได้? (กด Enter = 80)"
-$port = if ($portInput -match '^\d+$') { [int]$portInput } else { 80 }
-
-$ruleName = "KDS_IIS_Inbound_TCP_$port"
+$ruleName  = "KDS_IIS_Inbound_TCP_$port"
 $existingRule = Get-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue
 
 if (-not $existingRule) {
@@ -159,7 +174,7 @@ if (-not $existingRule) {
 }
 
 # ─────────────────────────────────────────────────────────────
-# 7. Restart IIS
+# 8. Restart IIS
 # ─────────────────────────────────────────────────────────────
 Write-Step "Restart IIS เพื่อให้ค่าใช้งานได้"
 
@@ -171,7 +186,7 @@ try {
 }
 
 # ─────────────────────────────────────────────────────────────
-# 8. สรุป
+# 9. สรุป
 # ─────────────────────────────────────────────────────────────
 $hostname = $env:COMPUTERNAME
 Write-Host ""
