@@ -43,6 +43,57 @@ require_once __DIR__ . '/auth_check.php';
 // timeout
 @set_time_limit(30);
 
+// ── Activity Log ──────────────────────────────────────────────
+function kdsLogDir()
+{
+    return __DIR__ . DIRECTORY_SEPARATOR . 'sl_data';
+}
+
+function kdsLogPath($cid, $date = null)
+{
+    $d = $date ?: date('Y-m-d');
+    return kdsLogDir() . DIRECTORY_SEPARATOR . 'kds_cid' . (int)$cid . '_' . $d . '.log';
+}
+
+function purgeOldKdsLogs($cid)
+{
+    $dir = kdsLogDir();
+    $pattern = $dir . DIRECTORY_SEPARATOR . 'kds_cid' . (int)$cid . '_*.log';
+    $cutoff = strtotime('-7 days');
+    foreach (glob($pattern) as $file) {
+        if (filemtime($file) < $cutoff) {
+            @unlink($file);
+        }
+    }
+}
+
+function writeActivityLog($action, $detail, $staffId = 0)
+{
+    $cid  = getEffectiveComputerId();
+    $dir  = kdsLogDir();
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+    $line = date('Y-m-d H:i:s') . ' | ' . str_pad((string)$action, 14) . ' | CID:' . $cid . ' | Staff:' . (int)$staffId . ' | ' . $detail . PHP_EOL;
+    $path = kdsLogPath($cid);
+    @file_put_contents($path, $line, FILE_APPEND | LOCK_EX);
+    purgeOldKdsLogs($cid);
+}
+
+function handleLogActivity()
+{
+    $action   = isset($_POST['action_type']) ? strtoupper(trim((string)$_POST['action_type'])) : '';
+    $detail   = isset($_POST['detail'])      ? trim((string)$_POST['detail'])                  : '';
+    $staffId  = isset($_POST['staff_id'])    ? (int)$_POST['staff_id']                         : 0;
+    $allowed  = array('LOGIN','LOGOUT','ZONE_CHANGE','APP_START','SETTINGS_VIEW');
+    if (!in_array($action, $allowed, true)) {
+        jsonResponse(array('success' => false, 'error' => 'invalid action_type'));
+        return;
+    }
+    writeActivityLog($action, $detail, $staffId);
+    jsonResponse(array('success' => true));
+}
+
 // กัน barcode scan ซ้ำฝั่ง PHP
 function guardDuplicateScan($code) {
     if (empty($code)) return false;
@@ -480,6 +531,7 @@ function handleSaveSystemSettings()
         $staffName = lookupStaffDisplayNameByConnection($conn, $settings['finish_staff_id']);
         $conn->close();
         writeSystemSettingsFile($settings);
+        writeActivityLog('SETTINGS_SAVE', 'ComputerID:' . $settings['current_computer_id'] . ' StaffID:' . $settings['finish_staff_id'], $settings['finish_staff_id']);
     } catch (Throwable $e) {
         jsonResponse(array('success' => false, 'error' => $e->getMessage()), 422);
     }
@@ -577,6 +629,10 @@ try {
 
     if ($method === 'POST' && $action === 'set_product_out_of_stock') {
         setProductOutOfStock($conn);
+    }
+
+    if ($method === 'POST' && $action === 'log_activity') {
+        handleLogActivity();
     }
 
     if ($method === 'GET' && ($action === 'list' || $action === '')) {
@@ -1731,6 +1787,10 @@ function checkoutOne($conn)
 
         $conn->commit();
 
+        $menuName = isset($row['ProductName']) ? (string)$row['ProductName'] : '-';
+        $tableName = isset($row['DisplayTableName']) ? (string)$row['DisplayTableName'] : '-';
+        writeActivityLog('CHECKOUT', 'Table:' . $tableName . ' Menu:' . $menuName . ' Process:' . $processId, $finishStaffId);
+
         jsonResponse(array(
             'success' => true,
             'message' => 'checkout 1 รายการเรียบร้อย',
@@ -1931,6 +1991,11 @@ function undoOne($conn)
         undoFinishedProcessRow($conn, $finishedRow);
 
         $conn->commit();
+
+        $menuName  = isset($finishedRow['ProductName'])      ? (string)$finishedRow['ProductName']      : '-';
+        $tableName = isset($finishedRow['DisplayTableName']) ? (string)$finishedRow['DisplayTableName'] : '-';
+        $undoStaff = requestInt('finish_staff_id', DEFAULT_FINISH_STAFF_ID);
+        writeActivityLog('UNDO', 'Table:' . $tableName . ' Menu:' . $menuName . ' Process:' . $processId, $undoStaff);
 
         jsonResponse(array(
             'success' => true,
@@ -2918,6 +2983,8 @@ function setProductOutOfStock($conn)
     }
 
     $actionText = $isOutOfStock ? 'ปิดสินค้าหมดแล้ว' : 'เปิดขายสินค้าแล้ว';
+    $productName = isset($product['ProductName']) ? (string)$product['ProductName'] : '-';
+    writeActivityLog('OUT_OF_STOCK', ($isOutOfStock ? 'CLOSE' : 'OPEN') . ' ProductID:' . $productId . ' ' . $productName, $updateBy);
     jsonResponse(array(
         'success' => true,
         'message' => $actionText,

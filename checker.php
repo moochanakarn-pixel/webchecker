@@ -748,6 +748,19 @@ $_ckBase = _computeCheckerBase();
         let activeRefreshTick = 0;
         var staffIsLoggedIn = false; // var เพราะต้องแชร์ข้าม <script> block กับ staff login IIFE
 
+        function kdsLogActivity(actionType, detail, staffId) {
+            const params = new URLSearchParams();
+            params.set('action',      'log_activity');
+            params.set('action_type', actionType);
+            params.set('detail',      detail || '');
+            params.set('staff_id',    String(staffId || 0));
+            kdsApiFetch(_kdsBase + '/api_checker.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                body: params.toString()
+            }).catch(function(){});
+        }
+
         const state = {
             stats: { active_rows: 0, active_qty: 0, recent_finished_rows: 0 },
             active_rows: [],
@@ -2644,6 +2657,7 @@ $_ckBase = _computeCheckerBase();
         initSoundSettings();
         initSoundUI();
         initBarcodeSettings();
+        kdsLogActivity('APP_START', 'CID:' + _kdsCid, 0);
         // โหลด zone_lock จาก settings เพื่อซ่อน/แสดงปุ่มเปลี่ยนโซน
         kdsApiFetch(_kdsBase + '/api_checker.php?action=get_system_settings&_=' + Date.now(), { cache: 'no-store' })
         .then(function(r){ return r.json(); })
@@ -2866,6 +2880,7 @@ $_ckBase = _computeCheckerBase();
                 if (zoneLabel) zoneLabel.textContent = currentZoneName;
                 localStorage.setItem('checker_zone_id', String(currentZoneId));
                 localStorage.setItem('checker_zone_name', currentZoneName);
+                kdsLogActivity('ZONE_CHANGE', 'Zone:' + currentZoneName + '(' + currentZoneId + ')', Number(localStorage.getItem('checker_finish_staff_id') || 0));
                 closeZoneModal();
                 applyZoneFilter();
             });
@@ -2920,7 +2935,9 @@ $_ckBase = _computeCheckerBase();
             .then(function(d){
                 if (d.success) {
                     localStorage.setItem('checker_finish_staff_id', String(d.staff_id));
+                    localStorage.setItem('checker_staff_logged_in', '1');
                     showLoggedIn(d.staff_name);
+                    kdsLogActivity('LOGIN', 'Staff:' + d.staff_name, d.staff_id);
                     showNotice('เข้าสู่ระบบแล้ว: ' + d.staff_name, 'success');
                 } else {
                     showNotice(d.error || 'ไม่พบพนักงาน', 'error');
@@ -2937,18 +2954,21 @@ $_ckBase = _computeCheckerBase();
         codeInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') doLogin(); });
 
         logoutBtn.addEventListener('click', function(){
+            const logoutStaffId = Number(localStorage.getItem('checker_finish_staff_id') || 0);
+            kdsLogActivity('LOGOUT', 'Staff:' + (nameLabel.textContent || '-'), logoutStaffId);
             localStorage.setItem('checker_finish_staff_id', String(defaultFinishStaffId));
+            localStorage.setItem('checker_staff_logged_in', '0');
             showLoggedOut();
             showNotice('ออกจากระบบแล้ว', 'success');
         });
 
-        // โหลดชื่อพนักงานที่ login อยู่เดิม
-        const savedId = localStorage.getItem('checker_finish_staff_id');
-        if (savedId && parseInt(savedId) > 0 && parseInt(savedId) !== defaultFinishStaffId) {
+        // โหลดชื่อพนักงานที่ login อยู่เดิม (ใช้ flag แยกต่างหาก ไม่ขึ้นกับค่า default staff id)
+        const savedId  = localStorage.getItem('checker_finish_staff_id');
+        const wasLoggedIn = localStorage.getItem('checker_staff_logged_in') === '1';
+        if (wasLoggedIn && savedId && parseInt(savedId) > 0) {
             kdsApiFetch(_kdsBase + '/api_checker.php?action=lookup_staff_name&staff_id=' + savedId + '&_=' + Date.now(), { cache: 'no-store' })
             .then(function(r){ return r.json(); })
             .then(function(d){
-                // ถ้าผู้ใช้พิมพ์ไปแล้วระหว่างรอ ไม่ต้อง override
                 if (codeInput.value.trim() !== '') return;
                 if (d.success && d.staff_name) showLoggedIn(d.staff_name); else showLoggedOut();
             })
