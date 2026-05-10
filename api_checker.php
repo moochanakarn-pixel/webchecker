@@ -46,7 +46,7 @@ require_once __DIR__ . '/auth_check.php';
 // ── Activity Log ──────────────────────────────────────────────
 function kdsLogDir()
 {
-    return __DIR__ . DIRECTORY_SEPARATOR . 'sl_data';
+    return __DIR__ . DIRECTORY_SEPARATOR . 'logs';
 }
 
 function kdsLogPath($cid, $date = null)
