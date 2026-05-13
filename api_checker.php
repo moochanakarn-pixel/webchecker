@@ -2353,8 +2353,12 @@ function tableExists($conn, $tableName)
         return $cache[$tableName];
     }
 
-    $dbName = $conn->query("SELECT DATABASE()")->fetch_row()[0];
+    $dbRes = $conn->query("SELECT DATABASE()");
+    $dbName = ($dbRes && ($dbRow = $dbRes->fetch_row())) ? (string)$dbRow[0] : '';
     $stmt = $conn->prepare("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?");
+    if (!$stmt) {
+        throw new Exception('Prepare failed: ' . $conn->error);
+    }
     $stmt->bind_param('ss', $dbName, $tableName);
     $stmt->execute();
     $stmt->bind_result($count);
