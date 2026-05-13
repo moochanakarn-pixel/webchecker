@@ -48,7 +48,7 @@ define('KDS_TWO_STEP_CHECKOUT_DEFAULT', (bool)localSetting($__localSettings, 'kd
 define('ALERT_THRESHOLD_YELLOW_DEFAULT', (int)localSetting($__localSettings, 'threshold_yellow', 10));
 define('ALERT_THRESHOLD_RED_DEFAULT', (int)localSetting($__localSettings, 'threshold_red', 20));
 define('SOUND_ALERT_ENABLED_DEFAULT', (bool)localSetting($__localSettings, 'sound_enabled', false));
-define('RECENT_FINISHED_LIMIT', 0); // 0 = ไม่จำกัด
+define('RECENT_FINISHED_LIMIT', 50);
 define('FINISHED_PREVIEW_LIMIT', 3);
 define('ENABLE_OUT_OF_STOCK_CONTROL', true);
 define('OUT_OF_STOCK_SHOW_LIMIT', 300);
@@ -60,7 +60,7 @@ define('PROCESS_STATUS_VOIDED', 98);
 define('PROCESS_STATUS_RESOLVED', 4);
 
 // Performance filter
-define('ACTIVE_ROWS_TODAY_ONLY', false);
+define('ACTIVE_ROWS_TODAY_ONLY', true);
 define('FINISHED_ROWS_TODAY_ONLY', true);
 
 // =============================

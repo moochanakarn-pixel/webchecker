@@ -159,6 +159,7 @@ function normalizeSystemSettingsPayload($source)
         'barcode_camera_enabled' => !empty($source['barcode_camera_enabled']) ? 1 : 0,
         'kds_two_step_checkout' => !empty($source['kds_two_step_checkout']) ? 1 : 0,
         'zone_lock' => !empty($source['zone_lock']) ? 1 : 0,
+        'out_of_stock_enabled' => isset($source['out_of_stock_enabled']) ? (!empty($source['out_of_stock_enabled']) ? 1 : 0) : 1,
     );
 }
 
@@ -212,6 +213,7 @@ function systemSettingsSnapshot()
         'barcode_camera_enabled' => !empty(localSetting($local, 'barcode_camera_enabled', defined('BARCODE_CAMERA_ENABLED_DEFAULT') ? BARCODE_CAMERA_ENABLED_DEFAULT : true)) ? 1 : 0,
         'kds_two_step_checkout' => !empty(localSetting($local, 'kds_two_step_checkout', defined('KDS_TWO_STEP_CHECKOUT_DEFAULT') ? KDS_TWO_STEP_CHECKOUT_DEFAULT : false)) ? 1 : 0,
         'zone_lock' => !empty(localSetting($local, 'zone_lock', false)) ? 1 : 0,
+        'out_of_stock_enabled' => (localSetting($local, 'out_of_stock_enabled', 1) !== 0) ? 1 : 0,
     );
 }
 
@@ -303,6 +305,7 @@ function writeSystemSettingsFile($settings)
         'barcode_camera_enabled' => !empty($settings['barcode_camera_enabled']) ? 1 : 0,
         'kds_two_step_checkout' => !empty($settings['kds_two_step_checkout']) ? 1 : 0,
         'zone_lock' => !empty($settings['zone_lock']) ? 1 : 0,
+        'out_of_stock_enabled' => isset($settings['out_of_stock_enabled']) ? (!empty($settings['out_of_stock_enabled']) ? 1 : 0) : 1,
     ));
 
     $content = "<?php\nreturn " . var_export($next, true) . ";\n";

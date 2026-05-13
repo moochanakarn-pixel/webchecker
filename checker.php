@@ -669,6 +669,13 @@ $_ckBase = _computeCheckerBase();
                         </div>
                         <input type="checkbox" id="kdsZoneLock">
                     </label>
+                    <label class="setting-check">
+                        <div>
+                            <div class="setting-check-title">แสดงปุ่มสินค้าหมด</div>
+                            <div class="setting-check-sub">แสดงปุ่ม "ปิดสินค้าหมด" บนแถบเครื่องมือ — ปิดถ้าไม่ต้องการใช้ฟีเจอร์นี้</div>
+                        </div>
+                        <input type="checkbox" id="kdsOutOfStockEnabled">
+                    </label>
                 </div>
             </div>
         </div>
@@ -741,7 +748,7 @@ $_ckBase = _computeCheckerBase();
         const thresholdRedDefault = <?php echo defined('ALERT_THRESHOLD_RED_DEFAULT') ? (int)ALERT_THRESHOLD_RED_DEFAULT : 20; ?>;
         const barcodeMediaSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
         const barcodeCameraSupported = !!(window.BarcodeDetector && barcodeMediaSupported);
-        const outOfStockControlEnabled = <?php echo defined('ENABLE_OUT_OF_STOCK_CONTROL') && ENABLE_OUT_OF_STOCK_CONTROL ? 'true' : 'false'; ?>;
+        var outOfStockControlEnabled = <?php echo defined('ENABLE_OUT_OF_STOCK_CONTROL') && ENABLE_OUT_OF_STOCK_CONTROL ? 'true' : 'false'; ?>;
 
         let isSubmitting = false;
         let noticeTimer = null;
@@ -1538,6 +1545,8 @@ $_ckBase = _computeCheckerBase();
             if (twoStepInput) twoStepInput.checked = Number(settings.kds_two_step_checkout || 0) === 1;
             const zoneLockInput = document.getElementById('kdsZoneLock');
             if (zoneLockInput) zoneLockInput.checked = Number(settings.zone_lock || 0) === 1;
+            const outOfStockInput = document.getElementById('kdsOutOfStockEnabled');
+            if (outOfStockInput) outOfStockInput.checked = settings.out_of_stock_enabled !== 0;
             const cameraEnabledInput = document.getElementById('barcodeCameraEnabled');
             if (cameraEnabledInput) {
                 cameraEnabledInput.checked = Number(settings.barcode_camera_enabled || 0) === 1;
@@ -1567,7 +1576,8 @@ $_ckBase = _computeCheckerBase();
                 sound_enabled: document.getElementById('soundEnabled').checked ? 1 : 0,
                 barcode_camera_enabled: document.getElementById('barcodeCameraEnabled').checked ? 1 : 0,
                 kds_two_step_checkout: document.getElementById('kdsTwoStepCheckout').checked ? 1 : 0,
-                zone_lock: (document.getElementById('kdsZoneLock') || {}).checked ? 1 : 0
+                zone_lock: (document.getElementById('kdsZoneLock') || {}).checked ? 1 : 0,
+                out_of_stock_enabled: (document.getElementById('kdsOutOfStockEnabled') || {}).checked ? 1 : 0
             };
         }
 
@@ -1634,6 +1644,7 @@ $_ckBase = _computeCheckerBase();
             state.kdsTwoStepCheckout = !!payload.kds_two_step_checkout;
             applyBarcodeCameraAvailability();
             applyZoneLock(!!payload.zone_lock);
+            applyOutOfStockEnabled(payload.out_of_stock_enabled !== 0);
             setStaffNameBox(staffName || '');
         }
 
@@ -2688,6 +2699,7 @@ $_ckBase = _computeCheckerBase();
             .then(function(d) {
                 if (!d.success) { showDbErrorState('การตั้งค่าระบบไม่สมบูรณ์'); return; }
                 applyZoneLock(!!d.settings.zone_lock);
+                applyOutOfStockEnabled(d.settings.out_of_stock_enabled !== 0);
                 var dbOk = (d.connection_message === 'เชื่อมต่อฐานข้อมูลปัจจุบันได้');
                 if (!dbOk) { showDbErrorState(d.connection_message); return; }
                 // DB OK — restore staff แล้วโหลดข้อมูล
@@ -2830,6 +2842,13 @@ $_ckBase = _computeCheckerBase();
         btn.style.cursor  = locked ? 'default' : '';
         btn.style.pointerEvents = locked ? 'none' : '';
         btn.title = locked ? 'โซนถูกล็อค — เปลี่ยนได้ในหน้าตั้งค่า' : '';
+    };
+
+    window.applyOutOfStockEnabled = function(enabled) {
+        outOfStockControlEnabled = !!enabled;
+        const btn = document.getElementById('openSoldOutBtn');
+        if (!btn) return;
+        btn.style.display = enabled ? '' : 'none';
     };
 
     (function(){
