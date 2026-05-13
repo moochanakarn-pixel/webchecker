@@ -2,6 +2,22 @@
 
 ---
 
+## v1.6.0 — 2026-05-13
+
+### 🆕 Features
+- **[Settings] toggle ปุ่มสินค้าหมด** — เพิ่ม toggle "แสดงปุ่มสินค้าหมด" ในหน้าตั้งค่า บันทึกลง `settings.local.php` → ซ่อน/แสดงปุ่ม "ปิดสินค้าหมด" บนแถบเครื่องมือได้
+
+### 🐛 Bug Fixes
+- **[Startup] ตรวจสอบ DB ก่อน restore staff** — เปลี่ยนลำดับ startup ให้เช็คการเชื่อมต่อ DB ก่อน แล้วค่อย restore session พนักงาน ป้องกัน error loop เมื่อ DB ไม่พร้อม
+- **[API] `finish_staff_id` validation ผิด** — แก้ validation จาก `<= 0` เป็น `< 0` เพื่อรองรับ `finish_staff_id = 0` (ไม่ระบุพนักงาน)
+- **[API] CURDATE() timezone mismatch** — เปลี่ยนจาก MySQL `CURDATE()` เป็น PHP `date('Y-m-d')` ใน `fetchActiveRows()`, `fetchFinishedRows()`, และ `fetchOutOfStockRows()` เพื่อให้ใช้ timezone Asia/Bangkok ที่กำหนดใน config
+
+### ⚙️ Config
+- `ACTIVE_ROWS_TODAY_ONLY`: เปลี่ยนค่าเริ่มต้นเป็น `true` สำหรับ production
+- `RECENT_FINISHED_LIMIT`: เปลี่ยนจาก 0 (ไม่จำกัด) เป็น 50
+
+---
+
 ## v1.5.0 — 2026-05-06
 
 ### 🆕 Features

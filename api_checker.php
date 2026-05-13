@@ -178,8 +178,8 @@ function validateSystemSettingsPayload($settings)
     if ($settings['current_computer_id'] <= 0) {
         $errors[] = 'Computer ID ต้องมากกว่า 0';
     }
-    if ($settings['finish_staff_id'] <= 0) {
-        $errors[] = 'Finish Staff ID ต้องมากกว่า 0';
+    if ($settings['finish_staff_id'] < 0) {
+        $errors[] = 'Finish Staff ID ไม่ถูกต้อง';
     }
     if ($settings['threshold_yellow'] <= 0) {
         $errors[] = 'เวลาแจ้งเตือนสีเหลืองต้องมากกว่า 0';
@@ -1072,7 +1072,7 @@ function fetchActiveRows($conn)
     $where = array('opf.ProcessStatus IN (' . $statusList . ')');
     appendAllowedPrinterFilter($where, $allowedPrinterIds, 'opf');
     if (ACTIVE_ROWS_TODAY_ONLY) {
-        $where[] = 'opf.OrderDate = CURDATE()';
+        $where[] = "opf.OrderDate = '" . date('Y-m-d') . "'";
     }
 
     $activeSql = "
@@ -1131,7 +1131,8 @@ function fetchFinishedRows($conn)
     $where = array('opf.ProcessStatus = ' . (int)PROCESS_STATUS_FINISHED);
     appendAllowedPrinterFilter($where, $allowedPrinterIds, 'opf');
     if (FINISHED_ROWS_TODAY_ONLY) {
-        $where[] = "(opf.OrderDate = CURDATE() OR (opf.FinishDateTime >= CURDATE() AND opf.FinishDateTime < DATE_ADD(CURDATE(), INTERVAL 1 DAY)))";
+        $today = date('Y-m-d');
+        $where[] = "(opf.OrderDate = '{$today}' OR (opf.FinishDateTime >= '{$today}' AND opf.FinishDateTime < DATE_ADD('{$today}', INTERVAL 1 DAY)))";
     }
 
     $finishedSql = "
@@ -1896,7 +1897,7 @@ function fetchLockedProcessRowByBarcode($conn, $processId, array $statuses)
     );
     appendAllowedPrinterFilter($where, $allowedPrinterIds, 'opf');
     if (ACTIVE_ROWS_TODAY_ONLY) {
-        $where[] = 'opf.OrderDate = CURDATE()';
+        $where[] = "opf.OrderDate = '" . date('Y-m-d') . "'";
     }
 
     $sql = "
