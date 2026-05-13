@@ -2658,18 +2658,53 @@ $_ckBase = _computeCheckerBase();
         initSoundUI();
         initBarcodeSettings();
         kdsLogActivity('APP_START', 'CID:' + _kdsCid, 0);
-        // โหลด zone_lock จาก settings เพื่อซ่อน/แสดงปุ่มเปลี่ยนโซน
-        kdsApiFetch(_kdsBase + '/api_checker.php?action=get_system_settings&_=' + Date.now(), { cache: 'no-store' })
-        .then(function(r){ return r.json(); })
-        .then(function(d){ if (d.success) applyZoneLock(!!d.settings.zone_lock); })
-        .catch(function(){});
-        loadAll().then(function() {
-            focusBarcodeInput();
-            // auto-open กล้องถ้า barcode_camera_enabled = 1
-            if (getBarcodeCameraEnabled() && barcodeMediaSupported && barcodeCameraSupported) {
-                setTimeout(openBarcodeCamera, 1500);
-            }
-        });
+
+        function showDbConnectingState() {
+            var wrap = document.getElementById('activeCards');
+            if (wrap) wrap.innerHTML = '<div class="empty" style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:40px 20px">' +
+                '<div style="font-size:32px">🔌</div>' +
+                '<div style="font-size:16px;font-weight:700;color:var(--primary)">กำลังเชื่อมต่อฐานข้อมูล...</div>' +
+                '</div>';
+            document.getElementById('queueSummary').textContent = 'กำลังเชื่อมต่อ...';
+        }
+
+        function showDbErrorState(msg) {
+            var wrap = document.getElementById('activeCards');
+            if (wrap) wrap.innerHTML = '<div class="empty" style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:40px 20px">' +
+                '<div style="font-size:36px">⚠️</div>' +
+                '<div style="font-size:16px;font-weight:700;color:var(--danger)">เชื่อมต่อฐานข้อมูลไม่สำเร็จ</div>' +
+                '<div style="font-size:13px;color:var(--muted);max-width:320px;text-align:center;word-break:break-all">' + (msg || '') + '</div>' +
+                '<button id="kdsDbRetryBtn" style="margin-top:6px;padding:10px 28px;background:var(--primary);color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">🔄 ลองเชื่อมต่อใหม่</button>' +
+                '</div>';
+            document.getElementById('queueSummary').textContent = 'เชื่อมต่อไม่สำเร็จ';
+            var retryBtn = document.getElementById('kdsDbRetryBtn');
+            if (retryBtn) retryBtn.addEventListener('click', kdsStartupCheck);
+        }
+
+        function kdsStartupCheck() {
+            showDbConnectingState();
+            kdsApiFetch(_kdsBase + '/api_checker.php?action=get_system_settings&_=' + Date.now(), { cache: 'no-store' })
+            .then(function(r){ return r.json(); })
+            .then(function(d) {
+                if (!d.success) { showDbErrorState('การตั้งค่าระบบไม่สมบูรณ์'); return; }
+                applyZoneLock(!!d.settings.zone_lock);
+                var dbOk = (d.connection_message === 'เชื่อมต่อฐานข้อมูลปัจจุบันได้');
+                if (!dbOk) { showDbErrorState(d.connection_message); return; }
+                // DB OK — restore staff แล้วโหลดข้อมูล
+                if (typeof window.kdsDoStaffRestore === 'function') window.kdsDoStaffRestore();
+                loadAll().then(function() {
+                    focusBarcodeInput();
+                    if (getBarcodeCameraEnabled() && barcodeMediaSupported && barcodeCameraSupported) {
+                        setTimeout(openBarcodeCamera, 1500);
+                    }
+                });
+            })
+            .catch(function() {
+                showDbErrorState('เชื่อมต่อระบบไม่สำเร็จ กรุณาตรวจสอบเครือข่าย');
+            });
+        }
+
+        kdsStartupCheck();
 
         setInterval(function() {
             if (isSubmitting) return;
@@ -2962,20 +2997,22 @@ $_ckBase = _computeCheckerBase();
             showNotice('ออกจากระบบแล้ว', 'success');
         });
 
-        // โหลดชื่อพนักงานที่ login อยู่เดิม (ใช้ flag แยกต่างหาก ไม่ขึ้นกับค่า default staff id)
-        const savedId  = localStorage.getItem('checker_finish_staff_id');
-        const wasLoggedIn = localStorage.getItem('checker_staff_logged_in') === '1';
-        if (wasLoggedIn && savedId && parseInt(savedId) > 0) {
-            kdsApiFetch(_kdsBase + '/api_checker.php?action=lookup_staff_name&staff_id=' + savedId + '&_=' + Date.now(), { cache: 'no-store' })
-            .then(function(r){ return r.json(); })
-            .then(function(d){
-                if (codeInput.value.trim() !== '') return;
-                if (d.success && d.staff_name) showLoggedIn(d.staff_name); else showLoggedOut();
-            })
-            .catch(function(){ if (codeInput.value.trim() === '') showLoggedOut(); });
-        } else {
-            showLoggedOut();
-        }
+        // restore staff — ถูกเรียกโดย kdsStartupCheck() หลังยืนยัน DB เชื่อมต่อสำเร็จ
+        window.kdsDoStaffRestore = function() {
+            var savedId    = localStorage.getItem('checker_finish_staff_id');
+            var wasLoggedIn = localStorage.getItem('checker_staff_logged_in') === '1';
+            if (wasLoggedIn && savedId && parseInt(savedId) > 0) {
+                kdsApiFetch(_kdsBase + '/api_checker.php?action=lookup_staff_name&staff_id=' + savedId + '&_=' + Date.now(), { cache: 'no-store' })
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                    if (codeInput.value.trim() !== '') return;
+                    if (d.success && d.staff_name) showLoggedIn(d.staff_name); else showLoggedOut();
+                })
+                .catch(function(){ if (codeInput.value.trim() === '') showLoggedOut(); });
+            } else {
+                showLoggedOut();
+            }
+        };
     })();
 
     // ── Staff Code Lookup ────────────────────────────────
