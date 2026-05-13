@@ -637,15 +637,8 @@ $_ckBase = _computeCheckerBase();
                     </label>
                     <div class="sound-upload-zone">
                         <div class="sound-upload-row">
-                            <span class="sound-name" id="soundFileName">ยังไม่ได้เลือกไฟล์เสียง</span>
+                            <span class="sound-name" id="soundFileName">กำลังโหลดเสียงจาก Server…</span>
                             <button type="button" class="btn btn-neutral sound-preview-btn" id="soundPreviewBtn" disabled>▶ ทดสอบ</button>
-                            <button type="button" class="btn btn-danger sound-preview-btn" id="soundClearBtn" style="display:none">✕</button>
-                        </div>
-                        <div class="sound-upload-row">
-                            <label class="btn btn-accent" style="cursor:pointer;min-height:36px;padding:0 14px;display:inline-flex;align-items:center;font-size:13px">
-                                📁 เลือกไฟล์เสียง (.mp3 / .wav / .ogg)
-                                <input type="file" class="sound-file-input" id="soundFileInput" accept="audio/mp3,audio/wav,audio/ogg,audio/*">
-                            </label>
                         </div>
                     </div>
                     <label class="setting-check">
@@ -1139,9 +1132,14 @@ $_ckBase = _computeCheckerBase();
             enabled: false,
             audioBuffer: null,
             audioCtx: null,
-            lastKnownProcessIds: null,
-            _pendingRaw: null        // raw ArrayBuffer รอ decode เมื่อ AudioContext พร้อม
+            lastKnownProcessIds: null
         };
+
+        const _serverSoundFiles = [
+            _kdsBase + '/assets/sounds/alert.mp3?v=<?php echo defined("APP_VERSION") ? h(APP_VERSION) : "1"; ?>',
+            _kdsBase + '/assets/sounds/alert.ogg?v=<?php echo defined("APP_VERSION") ? h(APP_VERSION) : "1"; ?>',
+            _kdsBase + '/assets/sounds/alert.wav?v=<?php echo defined("APP_VERSION") ? h(APP_VERSION) : "1"; ?>'
+        ];
 
         function getAudioCtx() {
             if (!soundSettings.audioCtx) {
@@ -1183,35 +1181,11 @@ $_ckBase = _computeCheckerBase();
             soundSettings.enabled = enabled;
             document.getElementById('soundEnabled').checked = enabled;
             document.getElementById('soundEnabledLabel').textContent = enabled ? 'เปิดอยู่' : 'ปิดอยู่';
-
-            // โหลดไฟล์เสียงที่ cached ใน IndexedDB (ถ้ามี)
-            loadCachedSound();
+            loadServerSound();
         }
 
         function initSoundUI() {
-            const fileInput = document.getElementById('soundFileInput');
             const enabledChk = document.getElementById('soundEnabled');
-
-            fileInput.addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = function(ev) {
-                    const ab = ev.target.result;
-                    getAudioCtx().decodeAudioData(ab.slice(0), function(buf) {
-                        soundSettings.audioBuffer = buf;
-                        document.getElementById('soundFileName').textContent = file.name;
-                        document.getElementById('soundFileName').className = 'sound-name loaded';
-                        document.getElementById('soundPreviewBtn').disabled = false;
-                        document.getElementById('soundClearBtn').style.display = '';
-                        // บันทึกลง IndexedDB
-                        saveSoundToCache(ab, file.name);
-                    }, function() {
-                        showNotice('ไม่สามารถโหลดไฟล์เสียงนี้ได้', 'error');
-                    });
-                };
-                reader.readAsArrayBuffer(file);
-            });
 
             document.getElementById('soundPreviewBtn').addEventListener('click', function() {
                 if (soundSettings.audioBuffer) {
@@ -1222,89 +1196,53 @@ $_ckBase = _computeCheckerBase();
                 }
             });
 
-            document.getElementById('soundClearBtn').addEventListener('click', function() {
-                soundSettings.audioBuffer = null;
-                document.getElementById('soundFileName').textContent = 'ยังไม่ได้เลือกไฟล์เสียง';
-                document.getElementById('soundFileName').className = 'sound-name';
-                document.getElementById('soundPreviewBtn').disabled = true;
-                document.getElementById('soundClearBtn').style.display = 'none';
-                document.getElementById('soundFileInput').value = '';
-                clearSoundCache();
-            });
-
             enabledChk.addEventListener('change', function() {
                 document.getElementById('soundEnabledLabel').textContent = this.checked ? 'เปิดอยู่' : 'ปิดอยู่';
             });
         }
 
-        // ── IndexedDB สำหรับเก็บไฟล์เสียง ──
-        function openSoundDB() {
-            return new Promise((res, rej) => {
-                const req = indexedDB.open('checker_sound_db', 1);
-                req.onupgradeneeded = e => e.target.result.createObjectStore('sounds');
-                req.onsuccess = e => res(e.target.result);
-                req.onerror   = e => rej(e);
-            });
-        }
-        async function saveSoundToCache(arrayBuffer, name) {
-            try {
-                const db = await openSoundDB();
-                const tx = db.transaction('sounds', 'readwrite');
-                tx.objectStore('sounds').put({ buffer: arrayBuffer, name }, 'alert');
-            } catch(e) { console.warn('saveSoundToCache', e); }
-        }
-        async function loadCachedSound() {
-            try {
-                const db = await openSoundDB();
-                const tx = db.transaction('sounds', 'readonly');
-                const req = tx.objectStore('sounds').get('alert');
-                req.onsuccess = function() {
-                    const rec = req.result;
-                    if (!rec) return;
-                    soundSettings._pendingRaw = rec;
-                    _tryDecodeSoundCache();
-                };
-            } catch(e) { console.warn('loadCachedSound', e); }
-        }
+        // ── โหลดเสียงจาก Server ──
+        async function loadServerSound() {
+            const fileNameSpan = document.getElementById('soundFileName');
+            const previewBtn = document.getElementById('soundPreviewBtn');
+            let loaded = false;
 
-        function _tryDecodeSoundCache() {
-            if (!soundSettings._pendingRaw || soundSettings.audioBuffer) return;
-            const rec = soundSettings._pendingRaw;
-            const ctx = getAudioCtx();
-            const doDecode = function() {
-                ctx.decodeAudioData(rec.buffer.slice(0), function(buf) {
-                    // ก่อน set audioBuffer ให้ init lastKnownProcessIds ก่อน ป้องกันเสียงดังทุก order
-                    if (soundSettings.lastKnownProcessIds === null) {
-                        soundSettings.lastKnownProcessIds = new Set((state.active_rows || []).map(function(r) { return String(r.ProcessID); }));
+            for (const url of _serverSoundFiles) {
+                try {
+                    const response = await fetch(url, { cache: 'force-cache' });
+                    if (!response.ok) continue;
+                    const arrayBuffer = await response.arrayBuffer();
+                    const ctx = getAudioCtx();
+                    const doDecode = function() {
+                        ctx.decodeAudioData(arrayBuffer.slice(0), function(buf) {
+                            if (soundSettings.lastKnownProcessIds === null) {
+                                soundSettings.lastKnownProcessIds = new Set((state.active_rows || []).map(function(r) { return String(r.ProcessID); }));
+                            }
+                            soundSettings.audioBuffer = buf;
+                            const fname = url.split('/').pop().split('?')[0];
+                            if (fileNameSpan) { fileNameSpan.textContent = '✅ ' + fname + ' (Server)'; fileNameSpan.className = 'sound-name loaded'; }
+                            if (previewBtn) previewBtn.disabled = false;
+                        }, function(err) { console.warn('decodeAudioData failed', err); });
+                    };
+                    if (ctx.state === 'suspended') {
+                        ctx.resume().then(doDecode).catch(function() {
+                            document.addEventListener('click', function onFirstClick() {
+                                document.removeEventListener('click', onFirstClick);
+                                loadServerSound();
+                            }, { once: true });
+                        });
+                    } else {
+                        doDecode();
                     }
-                    soundSettings.audioBuffer = buf;
-                    soundSettings._pendingRaw = null;
-                    document.getElementById('soundFileName').textContent = rec.name;
-                    document.getElementById('soundFileName').className = 'sound-name loaded';
-                    document.getElementById('soundPreviewBtn').disabled = false;
-                    document.getElementById('soundClearBtn').style.display = '';
-                }, function(err) {
-                    console.warn('decodeAudioData failed', err);
-                });
-            };
-            if (ctx.state === 'suspended') {
-                ctx.resume().then(doDecode).catch(function() {
-                    // resume ไม่ได้ก่อน user interaction — retry เมื่อ user กด
-                    document.addEventListener('click', function onFirstClick() {
-                        document.removeEventListener('click', onFirstClick);
-                        _tryDecodeSoundCache();
-                    }, { once: true });
-                });
-            } else {
-                doDecode();
+                    loaded = true;
+                    break;
+                } catch(e) { console.warn('loadServerSound failed:', url, e); }
             }
-        }
-        async function clearSoundCache() {
-            try {
-                const db = await openSoundDB();
-                const tx = db.transaction('sounds', 'readwrite');
-                tx.objectStore('sounds').delete('alert');
-            } catch(e) {}
+
+            if (!loaded) {
+                if (fileNameSpan) { fileNameSpan.textContent = '⚠️ ไม่พบไฟล์เสียง — วาง alert.mp3 ใน assets/sounds/'; fileNameSpan.className = 'sound-name'; }
+                if (previewBtn) previewBtn.disabled = true;
+            }
         }
 
         function initTimerThresholds() {
