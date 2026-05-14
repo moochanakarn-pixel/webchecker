@@ -678,13 +678,6 @@ $_ckBase = _computeCheckerBase();
                     </label>
                     <label class="setting-check">
                         <div>
-                            <div class="setting-check-title">ล็อคโซน</div>
-                            <div class="setting-check-sub">ซ่อนปุ่มเปลี่ยนโซน — โซนที่เลือกไว้จะไม่ถูกเปลี่ยนโดยไม่ตั้งใจ</div>
-                        </div>
-                        <input type="checkbox" id="kdsZoneLock">
-                    </label>
-                    <label class="setting-check">
-                        <div>
                             <div class="setting-check-title">แสดงปุ่มสินค้าหมด</div>
                             <div class="setting-check-sub">แสดงปุ่ม "ปิดสินค้าหมด" บนแถบเครื่องมือ — ปิดถ้าไม่ต้องการใช้ฟีเจอร์นี้</div>
                         </div>
@@ -1629,8 +1622,6 @@ $_ckBase = _computeCheckerBase();
             document.getElementById('soundEnabledLabel').textContent = document.getElementById('soundEnabled').checked ? 'เปิดอยู่' : 'ปิดอยู่';
             const twoStepInput = document.getElementById('kdsTwoStepCheckout');
             if (twoStepInput) twoStepInput.checked = Number(settings.kds_two_step_checkout || 0) === 1;
-            const zoneLockInput = document.getElementById('kdsZoneLock');
-            if (zoneLockInput) zoneLockInput.checked = Number(settings.zone_lock || 0) === 1;
             const outOfStockInput = document.getElementById('kdsOutOfStockEnabled');
             if (outOfStockInput) outOfStockInput.checked = settings.out_of_stock_enabled !== 0;
             const cameraEnabledInput = document.getElementById('barcodeCameraEnabled');
@@ -1664,7 +1655,6 @@ $_ckBase = _computeCheckerBase();
                 sound_enabled: document.getElementById('soundEnabled').checked ? 1 : 0,
                 barcode_camera_enabled: document.getElementById('barcodeCameraEnabled').checked ? 1 : 0,
                 kds_two_step_checkout: document.getElementById('kdsTwoStepCheckout').checked ? 1 : 0,
-                zone_lock: (document.getElementById('kdsZoneLock') || {}).checked ? 1 : 0,
                 out_of_stock_enabled: (document.getElementById('kdsOutOfStockEnabled') || {}).checked ? 1 : 0,
                 allowed_sale_mode_ids: getFilterChipValues('saleModeFilterChips'),
                 allowed_zone_ids: getFilterChipValues('zoneFilterChips'),
@@ -1733,7 +1723,6 @@ $_ckBase = _computeCheckerBase();
             soundSettings.enabled = !!payload.sound_enabled;
             state.kdsTwoStepCheckout = !!payload.kds_two_step_checkout;
             applyBarcodeCameraAvailability();
-            applyZoneLock(!!payload.zone_lock);
             applyOutOfStockEnabled(payload.out_of_stock_enabled !== 0);
             setStaffNameBox(staffName || '');
         }
@@ -2788,16 +2777,6 @@ $_ckBase = _computeCheckerBase();
             .then(function(r){ return r.json(); })
             .then(function(d) {
                 if (!d.success) { showDbErrorState('การตั้งค่าระบบไม่สมบูรณ์'); return; }
-                applyZoneLock(!!d.settings.zone_lock);
-                window._kdsZoneLocked = !!d.settings.zone_lock;
-                window._kdsAllowedZoneIds = Array.isArray(d.settings.allowed_zone_ids) ? d.settings.allowed_zone_ids.map(Number) : [];
-                // zone_lock ON + localStorage หาย + zones โหลดแล้ว → force zone ทันที
-                if (window._kdsZoneLocked && window._kdsAllowedZoneIds.length > 0) {
-                    const curId = parseInt(localStorage.getItem('checker_zone_id') || '0');
-                    if (curId === 0 && typeof window.kdsForceZone === 'function') {
-                        window.kdsForceZone(window._kdsAllowedZoneIds[0]);
-                    }
-                }
                 applyOutOfStockEnabled(d.settings.out_of_stock_enabled !== 0);
                 var dbOk = (d.connection_message === 'เชื่อมต่อฐานข้อมูลปัจจุบันได้');
                 if (!dbOk) { showDbErrorState(d.connection_message); return; }
@@ -2935,16 +2914,6 @@ $_ckBase = _computeCheckerBase();
                 el.style.display = cachedZoneTableIds.has(tid) ? '' : 'none';
             });
         }
-    window.applyZoneLock = function(locked) {
-        const btn = document.getElementById('openZoneBtn');
-        if (!btn) return;
-        btn.disabled = locked;
-        btn.style.opacity = locked ? '0.45' : '';
-        btn.style.cursor  = locked ? 'default' : '';
-        btn.style.pointerEvents = locked ? 'none' : '';
-        btn.title = locked ? 'โซนถูกล็อค — เปลี่ยนได้ในหน้าตั้งค่า' : '';
-    };
-
     window.applyOutOfStockEnabled = function(enabled) {
         outOfStockControlEnabled = !!enabled;
         const btn = document.getElementById('openSoldOutBtn');
@@ -2983,11 +2952,6 @@ $_ckBase = _computeCheckerBase();
                     if (currentZoneId > 0 && zoneLabel) {
                         const zf = zones.find(function(zz) { return zz.zoneid === currentZoneId; });
                         if (zf) zoneLabel.textContent = zf.zonename;
-                    }
-                    // zone_lock + ยังไม่มี zone → auto-select zone แรกจาก allowed list
-                    if (window._kdsZoneLocked && currentZoneId === 0 &&
-                        Array.isArray(window._kdsAllowedZoneIds) && window._kdsAllowedZoneIds.length > 0) {
-                        kdsForceZone(window._kdsAllowedZoneIds[0]);
                     }
                 }
             } catch(e) { console.warn('load zones error', e); }
@@ -3050,20 +3014,6 @@ $_ckBase = _computeCheckerBase();
                 applyZoneFilter();
             });
         }
-
-        // ตั้ง zone โดย force (ใช้เมื่อ lock หลุด localStorage หาย)
-        function kdsForceZone(zoneId) {
-            zoneId = parseInt(zoneId) || 0;
-            if (zoneId <= 0 || currentZoneId === zoneId) return;
-            currentZoneId = zoneId;
-            const zf = zones.find(function(zz) { return zz.zoneid === zoneId; });
-            currentZoneName = zf ? zf.zonename : ('Zone ' + zoneId);
-            if (zoneLabel) zoneLabel.textContent = currentZoneName;
-            localStorage.setItem('checker_zone_id', String(currentZoneId));
-            localStorage.setItem('checker_zone_name', currentZoneName);
-            filterCardsByZone(currentZoneId);
-        }
-        window.kdsForceZone = kdsForceZone;
 
         // คืนค่า zone จาก localStorage (จำ zone ข้ามรอบ refresh)
         (function restoreZone(){
