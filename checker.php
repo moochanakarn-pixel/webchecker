@@ -592,8 +592,9 @@ $_ckBase = _computeCheckerBase();
                         <input type="number" id="settingsComputerId" min="1" placeholder="เช่น 2">
                     </div>
                     <div class="setting-field">
-                        <label for="settingsComputerName">ชื่อเครื่องที่จะแสดง</label>
-                        <input type="text" id="settingsComputerName" placeholder="เช่น ครัวร้อน หรือ KDS 01">
+                        <label>ชื่อเครื่องที่จะแสดง</label>
+                        <input type="hidden" id="settingsComputerName">
+                        <div id="settingsComputerNameBox" class="settings-status"></div>
                     </div>
                 </div>
                 <div class="setting-grid" style="margin-top:10px">
@@ -1780,7 +1781,10 @@ $_ckBase = _computeCheckerBase();
             // db_port locked to 3307 — no UI field
             document.getElementById('settingsDbName').value = String(settings.db_name || '');
             document.getElementById('settingsComputerId').value = Number(settings.current_computer_id || 0) || '';
-            document.getElementById('settingsComputerName').value = String(settings.current_computer_name || '');
+            setComputerNameBox(String(settings.current_computer_name || ''));
+            if (!settings.current_computer_name && Number(settings.current_computer_id || 0) > 0) {
+                lookupComputerNameForSettings();
+            }
             const shopSelEl = document.getElementById('settingsShopId');
             if (shopSelEl) shopSelEl.value = Number(settings.shop_id || 0) || 0;
             // update shop name box
@@ -1878,17 +1882,30 @@ $_ckBase = _computeCheckerBase();
             }
         }
 
+        function setComputerNameBox(name) {
+            const box = document.getElementById('settingsComputerNameBox');
+            const hidden = document.getElementById('settingsComputerName');
+            const clean = String(name || '').trim();
+            if (box) {
+                box.textContent = clean || 'ไม่พบข้อมูลเครื่อง';
+                box.className = 'settings-status show ' + (clean ? 'success' : 'error');
+            }
+            if (hidden) hidden.value = clean;
+        }
+
         async function lookupComputerNameForSettings() {
             const computerId = Number(document.getElementById('settingsComputerId').value || 0);
-            const nameInput = document.getElementById('settingsComputerName');
-            if (computerId <= 0) return;
+            if (computerId <= 0) {
+                setComputerNameBox('');
+                return;
+            }
             try {
                 const response = await kdsApiFetch(_kdsBase + '/api_checker.php?action=lookup_computer_name&computer_id=' + encodeURIComponent(computerId) + '&_=' + Date.now(), { cache: 'no-store' });
                 const data = await response.json();
-                if (response.ok && data.success && data.computer_name) {
-                    nameInput.value = data.computer_name;
-                }
-            } catch (e) { /* ปล่อยให้กรอกเอง */ }
+                setComputerNameBox((response.ok && data.success) ? (data.computer_name || '') : '');
+            } catch (e) {
+                setComputerNameBox('');
+            }
         }
 
         async function lookupStaffNameForSettings() {
@@ -2861,6 +2878,9 @@ $_ckBase = _computeCheckerBase();
             window.__settingsStaffTimer = setTimeout(lookupStaffNameForSettings, 220);
         });
         document.getElementById('settingsComputerId').addEventListener('change', lookupComputerNameForSettings);
+        document.getElementById('settingsComputerId').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); lookupComputerNameForSettings(); }
+        });
         document.getElementById('timerSettingsBackdrop').addEventListener('click', closeTimerSettings);
         document.getElementById('finishedDrawerBackdrop').addEventListener('click', closeFinishedDrawer);
 
