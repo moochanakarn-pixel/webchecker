@@ -468,14 +468,8 @@ function handleListSaleModes()
     try {
         $snapshot = systemSettingsSnapshot();
         $conn = connectWithSystemSettings($snapshot);
-        // เฉพาะ SaleMode ที่มีออเดอร์จริงในระบบ (เคยใช้งานจริง)
-        $sql = "
-            SELECT DISTINCT sm.SaleModeID, sm.SaleModeName
-            FROM salemode sm
-            INNER JOIN orderprocessdetailfront opf ON opf.SaleModeID = sm.SaleModeID
-            WHERE sm.Deleted = 0
-            ORDER BY sm.SaleModeID ASC
-        ";
+        // เฉพาะ SaleMode ที่ยังไม่ถูกลบ (Deleted = 0) = เปิดใช้งานอยู่
+        $sql = "SELECT SaleModeID, SaleModeName FROM salemode WHERE Deleted = 0 ORDER BY SaleModeID ASC";
         $result = $conn->query($sql);
         $modes = array();
         if ($result) {
