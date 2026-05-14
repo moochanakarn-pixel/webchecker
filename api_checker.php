@@ -143,6 +143,22 @@ function requestedAction()
     return preg_replace('/[^a-z0-9_]/', '', $act) ?: 'list';
 }
 
+// แปลง comma-separated string หรือ array → array ของ int ที่ > 0
+function parseIdList($value)
+{
+    if (is_array($value)) {
+        return array_values(array_unique(array_filter(array_map('intval', $value), function($v) { return $v > 0; })));
+    }
+    $str = trim((string)$value);
+    if ($str === '') return array();
+    $ids = array();
+    foreach (explode(',', $str) as $p) {
+        $id = (int)trim($p);
+        if ($id > 0) $ids[] = $id;
+    }
+    return array_values(array_unique($ids));
+}
+
 function normalizeSystemSettingsPayload($source)
 {
     return array(
@@ -160,6 +176,8 @@ function normalizeSystemSettingsPayload($source)
         'kds_two_step_checkout' => !empty($source['kds_two_step_checkout']) ? 1 : 0,
         'zone_lock' => !empty($source['zone_lock']) ? 1 : 0,
         'out_of_stock_enabled' => isset($source['out_of_stock_enabled']) ? (!empty($source['out_of_stock_enabled']) ? 1 : 0) : 1,
+        'allowed_sale_mode_ids' => parseIdList($source['allowed_sale_mode_ids'] ?? ''),
+        'allowed_zone_ids' => parseIdList($source['allowed_zone_ids'] ?? ''),
     );
 }
 
@@ -214,6 +232,8 @@ function systemSettingsSnapshot()
         'kds_two_step_checkout' => !empty(localSetting($local, 'kds_two_step_checkout', defined('KDS_TWO_STEP_CHECKOUT_DEFAULT') ? KDS_TWO_STEP_CHECKOUT_DEFAULT : false)) ? 1 : 0,
         'zone_lock' => !empty(localSetting($local, 'zone_lock', false)) ? 1 : 0,
         'out_of_stock_enabled' => (localSetting($local, 'out_of_stock_enabled', 1) !== 0) ? 1 : 0,
+        'allowed_sale_mode_ids' => parseIdList(localSetting($local, 'allowed_sale_mode_ids', array())),
+        'allowed_zone_ids' => parseIdList(localSetting($local, 'allowed_zone_ids', array())),
     );
 }
 
@@ -306,6 +326,8 @@ function writeSystemSettingsFile($settings)
         'kds_two_step_checkout' => !empty($settings['kds_two_step_checkout']) ? 1 : 0,
         'zone_lock' => !empty($settings['zone_lock']) ? 1 : 0,
         'out_of_stock_enabled' => isset($settings['out_of_stock_enabled']) ? (!empty($settings['out_of_stock_enabled']) ? 1 : 0) : 1,
+        'allowed_sale_mode_ids' => parseIdList($settings['allowed_sale_mode_ids'] ?? ''),
+        'allowed_zone_ids' => parseIdList($settings['allowed_zone_ids'] ?? ''),
     ));
 
     $content = "<?php\nreturn " . var_export($next, true) . ";\n";
@@ -441,6 +463,29 @@ function handleListShops()
     }
 }
 
+function handleListSaleModes()
+{
+    try {
+        $snapshot = systemSettingsSnapshot();
+        $conn = connectWithSystemSettings($snapshot);
+        $sql = "SELECT SaleModeID, SaleModeName FROM salemode WHERE Deleted = 0 ORDER BY SaleModeID ASC";
+        $result = $conn->query($sql);
+        $modes = array();
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $modes[] = array(
+                    'sale_mode_id' => (int)$row['SaleModeID'],
+                    'sale_mode_name' => (string)$row['SaleModeName'],
+                );
+            }
+        }
+        $conn->close();
+        jsonResponse(array('success' => true, 'sale_modes' => $modes));
+    } catch (Throwable $e) {
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+    }
+}
+
 function handleListZones()
 {
     try {
@@ -569,6 +614,11 @@ try {
 
     if ($method === 'GET' && $action === 'list_shops') {
         handleListShops();
+        exit;
+    }
+
+    if ($method === 'GET' && $action === 'list_sale_modes') {
+        handleListSaleModes();
         exit;
     }
 
@@ -1044,6 +1094,34 @@ function appendAllowedPrinterFilter(array &$where, array $allowedPrinterIds, $al
     $where[] = $alias . '.PrinterID IN (' . implode(', ', $safeIds) . ')';
 }
 
+// โหลด filter SaleMode + Zone จาก settings.local.php ของสถานีนี้
+function getStationFilter()
+{
+    $settingsPath = resolveKdsSettingsPath();
+    $local = is_file($settingsPath) ? (require $settingsPath) : array();
+    if (!is_array($local)) $local = array();
+    return array(
+        'allowed_sale_mode_ids' => parseIdList(isset($local['allowed_sale_mode_ids']) ? $local['allowed_sale_mode_ids'] : array()),
+        'allowed_zone_ids' => parseIdList(isset($local['allowed_zone_ids']) ? $local['allowed_zone_ids'] : array()),
+    );
+}
+
+// เพิ่ม WHERE clause สำหรับ SaleMode และ Zone filter
+// $needZoneJoin ถูก set เป็น true ถ้าต้องการ LEFT JOIN tableno tn
+function appendSaleModeZoneFilter(array &$where, array $saleModeIds, array $zoneIds, &$needZoneJoin)
+{
+    if (!empty($saleModeIds)) {
+        $safe = implode(',', array_map('intval', $saleModeIds));
+        $where[] = "opf.SaleModeID IN ({$safe})";
+    }
+    if (!empty($zoneIds)) {
+        $needZoneJoin = true;
+        $safe = implode(',', array_map('intval', $zoneIds));
+        // รายการที่ไม่มีโต๊ะ (Takeaway/Delivery ที่ไม่มี TableID) ผ่านเสมอ
+        $where[] = "(opf.TableID IS NULL OR opf.TableID = 0 OR tn.ZoneID IN ({$safe}))";
+    }
+}
+
 function buildStats($activeRows, $finishedRows)
 {
     $activeCount = count($activeRows);
@@ -1062,6 +1140,7 @@ function buildStats($activeRows, $finishedRows)
 function fetchActiveRows($conn)
 {
     $allowedPrinterIds = fetchAllowedPrinterIds($conn, getEffectiveComputerId());
+    $stationFilter = getStationFilter();
 
     // รวม voided/deleted (98) ด้วยเพื่อแสดงสีเทา
     $statusList = implode(', ', array(
@@ -1074,6 +1153,12 @@ function fetchActiveRows($conn)
     if (ACTIVE_ROWS_TODAY_ONLY) {
         $where[] = "opf.OrderDate = '" . date('Y-m-d') . "'";
     }
+    $needZoneJoin = false;
+    appendSaleModeZoneFilter($where, $stationFilter['allowed_sale_mode_ids'], $stationFilter['allowed_zone_ids'], $needZoneJoin);
+
+    $zoneJoinSql = $needZoneJoin
+        ? "\n        LEFT JOIN tableno tn ON tn.TableID = opf.TableID AND tn.Deleted = 0"
+        : '';
 
     $activeSql = "
         SELECT
@@ -1111,7 +1196,7 @@ function fetchActiveRows($conn)
         FROM orderprocessdetailfront opf
         LEFT JOIN salemode sm
             ON sm.SaleModeID = opf.SaleModeID
-           AND sm.Deleted = 0
+           AND sm.Deleted = 0" . $zoneJoinSql . "
         WHERE " . implode(' AND ', $where) . "
         ORDER BY
             opf.SubmitOrderDateTime ASC,
@@ -1127,6 +1212,7 @@ function fetchActiveRows($conn)
 function fetchFinishedRows($conn)
 {
     $allowedPrinterIds = fetchAllowedPrinterIds($conn, getEffectiveComputerId());
+    $stationFilter = getStationFilter();
 
     $where = array('opf.ProcessStatus = ' . (int)PROCESS_STATUS_FINISHED);
     appendAllowedPrinterFilter($where, $allowedPrinterIds, 'opf');
@@ -1134,6 +1220,12 @@ function fetchFinishedRows($conn)
         $today = date('Y-m-d');
         $where[] = "(opf.OrderDate = '{$today}' OR (opf.FinishDateTime >= '{$today}' AND opf.FinishDateTime < DATE_ADD('{$today}', INTERVAL 1 DAY)))";
     }
+    $needZoneJoin = false;
+    appendSaleModeZoneFilter($where, $stationFilter['allowed_sale_mode_ids'], $stationFilter['allowed_zone_ids'], $needZoneJoin);
+
+    $zoneJoinSql = $needZoneJoin
+        ? "\n        LEFT JOIN tableno tn ON tn.TableID = opf.TableID AND tn.Deleted = 0"
+        : '';
 
     $finishedSql = "
         SELECT
@@ -1162,7 +1254,7 @@ function fetchFinishedRows($conn)
         FROM orderprocessdetailfront opf
         LEFT JOIN salemode sm
             ON sm.SaleModeID = opf.SaleModeID
-           AND sm.Deleted = 0
+           AND sm.Deleted = 0" . $zoneJoinSql . "
         WHERE " . implode(' AND ', $where) . "
         ORDER BY
             opf.FinishDateTime DESC,

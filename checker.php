@@ -350,6 +350,13 @@ $_ckBase = _computeCheckerBase();
         .setting-check input{width:18px;height:18px;flex:0 0 auto;margin-top:2px;cursor:pointer}
         .setting-check-title{font-size:14px;font-weight:600;color:var(--text)}
         .setting-check-sub{margin-top:3px;font-size:12px;color:var(--muted);line-height:1.45}
+        .filter-section{display:flex;flex-direction:column;gap:8px}
+        .filter-section-title{font-size:13px;font-weight:700;color:#334155;margin-bottom:2px}
+        .filter-section-sub{font-size:12px;color:var(--muted);margin-bottom:6px}
+        .filter-chips{display:flex;flex-wrap:wrap;gap:6px}
+        .filter-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;border:1.5px solid var(--line);background:#f8fbff;font-size:13px;font-weight:600;color:#334155;cursor:pointer;user-select:none;transition:border-color .15s,background .15s}
+        .filter-chip input[type=checkbox]{display:none}
+        .filter-chip.active{border-color:#1683ff;background:#e6f0ff;color:#1250b0}
         .setting-stack{display:flex;flex-direction:column;gap:14px}
         .setting-grid{display:grid;grid-template-columns:1fr 160px;gap:12px}
         .setting-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -683,6 +690,20 @@ $_ckBase = _computeCheckerBase();
                         </div>
                         <input type="checkbox" id="kdsOutOfStockEnabled">
                     </label>
+                </div>
+            </div>
+            <div class="modal-section">
+                <div class="modal-section-title">กรอง SaleMode</div>
+                <div class="filter-section">
+                    <div class="filter-section-sub">เลือก SaleMode ที่ต้องการแสดงในสถานีนี้ — ไม่เลือก = แสดงทั้งหมด</div>
+                    <div class="filter-chips" id="saleModeFilterChips"><span style="font-size:13px;color:var(--muted)">กำลังโหลด...</span></div>
+                </div>
+            </div>
+            <div class="modal-section">
+                <div class="modal-section-title">กรองโซน</div>
+                <div class="filter-section">
+                    <div class="filter-section-sub">เลือกโซนโต๊ะที่ต้องการแสดง — ไม่เลือก = แสดงทั้งหมด | รายการไม่มีโต๊ะ (Takeaway/Delivery) แสดงเสมอ</div>
+                    <div class="filter-chips" id="zoneFilterChips"><span style="font-size:13px;color:var(--muted)">กำลังโหลด...</span></div>
                 </div>
             </div>
         </div>
@@ -1331,17 +1352,74 @@ $_ckBase = _computeCheckerBase();
             state.timerSettingsOpen = true;
             syncTimerSettingsState();
             try {
-                const response = await kdsApiFetch(_kdsBase + '/api_checker.php?action=get_system_settings&_=' + Date.now(), { cache: 'no-store' });
-                const data = await response.json();
-                if (!response.ok || !data.success) {
+                const [settingsRes, saleModesRes, zonesRes] = await Promise.all([
+                    kdsApiFetch(_kdsBase + '/api_checker.php?action=get_system_settings&_=' + Date.now(), { cache: 'no-store' }),
+                    kdsApiFetch(_kdsBase + '/api_checker.php?action=list_sale_modes&_=' + Date.now(), { cache: 'no-store' }),
+                    kdsApiFetch(_kdsBase + '/api_checker.php?action=list_zones&_=' + Date.now(), { cache: 'no-store' }),
+                ]);
+                const data = await settingsRes.json();
+                if (!settingsRes.ok || !data.success) {
                     throw new Error(data.error || 'โหลดค่าระบบไม่สำเร็จ');
                 }
+                const saleModesData = saleModesRes.ok ? await saleModesRes.json() : {};
+                const zonesData = zonesRes.ok ? await zonesRes.json() : {};
+                const saleModes = (saleModesData.success && Array.isArray(saleModesData.sale_modes)) ? saleModesData.sale_modes : [];
+                const zones = (zonesData.success && Array.isArray(zonesData.zones)) ? zonesData.zones : [];
+                renderFilterChips('saleModeFilterChips', saleModes, 'sale_mode_id', 'sale_mode_name');
+                renderFilterChips('zoneFilterChips', zones, 'zoneid', 'zonename');
                 applySystemSettingsToModal(data.settings || {}, data.staff_name || '', data.connection_message || '');
                 state.systemSettingsLoaded = true;
                 state.currentSystemSettings = data.settings || {};
             } catch (error) {
                 showSystemSettingsStatus(error.message || 'โหลดค่าระบบไม่สำเร็จ', 'error');
             }
+        }
+
+        function renderFilterChips(containerId, items, idKey, nameKey) {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            if (!items || items.length === 0) {
+                el.innerHTML = '<span style="font-size:13px;color:var(--muted)">ไม่พบข้อมูล</span>';
+                return;
+            }
+            el.innerHTML = items.map(function(item) {
+                const id = item[idKey];
+                const name = String(item[nameKey] || '');
+                return '<label class="filter-chip" data-id="' + id + '">' +
+                    '<input type="checkbox" value="' + id + '">' + name + '</label>';
+            }).join('');
+            el.querySelectorAll('.filter-chip').forEach(function(chip) {
+                chip.addEventListener('click', function() {
+                    const cb = chip.querySelector('input[type=checkbox]');
+                    if (!cb) return;
+                    cb.checked = !cb.checked;
+                    chip.classList.toggle('active', cb.checked);
+                });
+            });
+        }
+
+        function setFilterChips(containerId, selectedIds) {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            const selected = new Set((selectedIds || []).map(Number));
+            el.querySelectorAll('.filter-chip').forEach(function(chip) {
+                const id = Number(chip.getAttribute('data-id'));
+                const cb = chip.querySelector('input[type=checkbox]');
+                const active = selected.has(id);
+                if (cb) cb.checked = active;
+                chip.classList.toggle('active', active);
+            });
+        }
+
+        function getFilterChipValues(containerId) {
+            const el = document.getElementById(containerId);
+            if (!el) return [];
+            const ids = [];
+            el.querySelectorAll('.filter-chip input[type=checkbox]:checked').forEach(function(cb) {
+                const id = parseInt(cb.value, 10);
+                if (id > 0) ids.push(id);
+            });
+            return ids;
         }
 
         function closeTimerSettings() {
@@ -1567,6 +1645,8 @@ $_ckBase = _computeCheckerBase();
             if (connectionMessage) {
                 showSystemSettingsStatus(connectionMessage, connectionMessage.indexOf('เชื่อมต่อ') === 0 ? 'success' : 'error');
             }
+            setFilterChips('saleModeFilterChips', settings.allowed_sale_mode_ids || []);
+            setFilterChips('zoneFilterChips', settings.allowed_zone_ids || []);
         }
 
         function collectSystemSettingsFromModal() {
@@ -1584,7 +1664,9 @@ $_ckBase = _computeCheckerBase();
                 barcode_camera_enabled: document.getElementById('barcodeCameraEnabled').checked ? 1 : 0,
                 kds_two_step_checkout: document.getElementById('kdsTwoStepCheckout').checked ? 1 : 0,
                 zone_lock: (document.getElementById('kdsZoneLock') || {}).checked ? 1 : 0,
-                out_of_stock_enabled: (document.getElementById('kdsOutOfStockEnabled') || {}).checked ? 1 : 0
+                out_of_stock_enabled: (document.getElementById('kdsOutOfStockEnabled') || {}).checked ? 1 : 0,
+                allowed_sale_mode_ids: getFilterChipValues('saleModeFilterChips'),
+                allowed_zone_ids: getFilterChipValues('zoneFilterChips'),
             };
         }
 
