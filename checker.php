@@ -474,6 +474,7 @@ $_ckBase = _computeCheckerBase();
                 <button type="button" class="btn btn-accent" id="openSystemSettingsBtn" style="display:none">⚙️ ตั้งค่าระบบ</button>
                 <button type="button" class="btn btn-neutral" id="openSoldOutBtn">🥫 ปิดสินค้าหมด</button>
                 <button type="button" class="btn btn-neutral" id="openZoneBtn">📍 โซน: <span id="zoneLabel">ทั้งหมด</span></button>
+                <button type="button" class="btn btn-neutral" id="barcodeToggleBtn" title="เปิด/ปิดช่องสแกนบาร์โค้ด">🔍 สแกน</button>
                 <div class="barcode-tools" id="barcodeTools">
                     <div class="field-card field-card-barcode">
                         <label for="barcodeInput">สแกนบาร์โค้ด</label>
@@ -905,6 +906,7 @@ $_ckBase = _computeCheckerBase();
         function focusBarcodeInput(selectText) {
             if (state.barcodeCameraOpen) return;
             if (isMobile()) return; // มือถือไม่ focus — กัน keyboard เปิด
+            if (!getBarcodeVisible()) return; // ซ่อนอยู่ → ไม่ focus
             const input = document.getElementById('barcodeInput');
             if (!input || !barcodeCheckoutEnabled) return;
             window.requestAnimationFrame(function() {
@@ -972,12 +974,44 @@ $_ckBase = _computeCheckerBase();
             }, 1200);
         }
 
+        const _barcodeVisibleKey = 'checker_barcode_visible_' + String(currentComputerIdFromConfig || 0);
+
+        function getBarcodeVisible() {
+            const v = localStorage.getItem(_barcodeVisibleKey);
+            return v === null ? true : v === '1';
+        }
+
+        function applyBarcodeVisible(visible) {
+            const tools = document.getElementById('barcodeTools');
+            const btn   = document.getElementById('barcodeToggleBtn');
+            if (tools) tools.style.display = visible ? '' : 'none';
+            if (btn) btn.classList.toggle('btn-primary', visible);
+            if (visible) focusBarcodeInput();
+        }
+
+        function initBarcodeToggle() {
+            const btn = document.getElementById('barcodeToggleBtn');
+            if (!btn || !barcodeCheckoutEnabled) {
+                if (btn) btn.style.display = 'none';
+                return;
+            }
+            const visible = getBarcodeVisible();
+            applyBarcodeVisible(visible);
+            btn.addEventListener('click', function() {
+                const next = !getBarcodeVisible();
+                localStorage.setItem(_barcodeVisibleKey, next ? '1' : '0');
+                applyBarcodeVisible(next);
+            });
+        }
+
         function initBarcodeSettings() {
             const input = document.getElementById('barcodeInput');
             const tools = document.getElementById('barcodeTools');
             barcodeCaptureState.preferredFacingMode = getPreferredBarcodeFacingMode();
             if (!barcodeCheckoutEnabled) {
                 if (tools) tools.style.display = 'none';
+                const btn = document.getElementById('barcodeToggleBtn');
+                if (btn) btn.style.display = 'none';
                 return;
             }
             applyBarcodeCameraAvailability();
@@ -986,7 +1020,7 @@ $_ckBase = _computeCheckerBase();
                 input.setAttribute('autocorrect', 'off');
                 input.setAttribute('spellcheck', 'false');
             }
-            focusBarcodeInput();
+            initBarcodeToggle();
         }
 
         async function switchBarcodeCameraFacing() {
