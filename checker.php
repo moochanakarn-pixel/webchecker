@@ -1627,7 +1627,7 @@ $_ckBase = _computeCheckerBase();
 
         function applySystemSettingsToModal(settings, staffName, connectionMessage) {
             document.getElementById('settingsDbHost').value = String(settings.db_host || '');
-            document.getElementById('settingsDbPort').value = Number(settings.db_port || 3306);
+            document.getElementById('settingsDbPort').value = Number(settings.db_port || 3307);
             document.getElementById('settingsDbName').value = String(settings.db_name || '');
             document.getElementById('settingsComputerId').value = Number(settings.current_computer_id || 0) || '';
             document.getElementById('settingsComputerName').value = String(settings.current_computer_name || '');

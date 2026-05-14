@@ -163,7 +163,7 @@ function normalizeSystemSettingsPayload($source)
 {
     return array(
         'db_host' => trim((string)($source['db_host'] ?? '')),
-        'db_port' => (int)($source['db_port'] ?? 3306),
+        'db_port' => (int)($source['db_port'] ?? 3307),
         'db_name' => trim((string)($source['db_name'] ?? '')),
         'shop_id' => (int)($source['shop_id'] ?? 0),
         'current_computer_id' => (int)($source['current_computer_id'] ?? 0),
