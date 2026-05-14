@@ -640,6 +640,12 @@ $_ckBase = _computeCheckerBase();
                             <span class="sound-name" id="soundFileName">กำลังโหลดเสียงจาก Server…</span>
                             <button type="button" class="btn btn-neutral sound-preview-btn" id="soundPreviewBtn" disabled>▶ ทดสอบ</button>
                         </div>
+                        <div class="sound-upload-row" id="soundUploadRow" style="display:none">
+                            <label class="btn btn-accent" style="cursor:pointer;min-height:36px;padding:0 14px;display:inline-flex;align-items:center;font-size:13px">
+                                📁 เลือกไฟล์เสียง (.mp3 / .wav / .ogg)
+                                <input type="file" class="sound-file-input" id="soundFileInput" accept="audio/mp3,audio/wav,audio/ogg,audio/*">
+                            </label>
+                        </div>
                     </div>
                     <label class="setting-check">
                         <div>
@@ -1186,6 +1192,35 @@ $_ckBase = _computeCheckerBase();
 
         function initSoundUI() {
             const enabledChk = document.getElementById('soundEnabled');
+            const fileInput = document.getElementById('soundFileInput');
+
+            fileInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    const ab = ev.target.result;
+                    const ctx = getAudioCtx();
+                    const doDecode = function() {
+                        ctx.decodeAudioData(ab.slice(0), function(buf) {
+                            if (soundSettings.lastKnownProcessIds === null) {
+                                soundSettings.lastKnownProcessIds = new Set((state.active_rows || []).map(function(r) { return String(r.ProcessID); }));
+                            }
+                            soundSettings.audioBuffer = buf;
+                            const fileNameSpan = document.getElementById('soundFileName');
+                            if (fileNameSpan) { fileNameSpan.textContent = '✅ ' + file.name + ' (อัปโหลด)'; fileNameSpan.className = 'sound-name loaded'; }
+                            const previewBtn = document.getElementById('soundPreviewBtn');
+                            if (previewBtn) previewBtn.disabled = false;
+                        }, function() { showNotice('ไม่สามารถโหลดไฟล์เสียงนี้ได้', 'error'); });
+                    };
+                    if (ctx.state === 'suspended') {
+                        ctx.resume().then(doDecode).catch(function() { doDecode(); });
+                    } else {
+                        doDecode();
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            });
 
             document.getElementById('soundPreviewBtn').addEventListener('click', function() {
                 if (soundSettings.audioBuffer) {
@@ -1240,8 +1275,10 @@ $_ckBase = _computeCheckerBase();
             }
 
             if (!loaded) {
-                if (fileNameSpan) { fileNameSpan.textContent = '⚠️ ไม่พบไฟล์เสียง — วาง alert.mp3 ใน assets/sounds/'; fileNameSpan.className = 'sound-name'; }
+                if (fileNameSpan) { fileNameSpan.textContent = 'ไม่พบเสียงบน Server — เลือกไฟล์จากเครื่องได้เลย'; fileNameSpan.className = 'sound-name'; }
                 if (previewBtn) previewBtn.disabled = true;
+                const uploadRow = document.getElementById('soundUploadRow');
+                if (uploadRow) uploadRow.style.display = '';
             }
         }
 
