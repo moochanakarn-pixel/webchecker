@@ -1389,7 +1389,8 @@ $_ckBase = _computeCheckerBase();
                     '<input type="checkbox" value="' + id + '">' + name + '</label>';
             }).join('');
             el.querySelectorAll('.filter-chip').forEach(function(chip) {
-                chip.addEventListener('click', function() {
+                chip.addEventListener('click', function(e) {
+                    e.preventDefault(); // กัน browser toggle checkbox ซ้ำ (label + synthetic click)
                     const cb = chip.querySelector('input[type=checkbox]');
                     if (!cb) return;
                     cb.checked = !cb.checked;
