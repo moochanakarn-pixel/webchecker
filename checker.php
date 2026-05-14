@@ -571,16 +571,15 @@ $_ckBase = _computeCheckerBase();
                         <label for="settingsDbHost">DB Host / IP</label>
                         <input type="text" id="settingsDbHost" placeholder="เช่น 127.0.0.1 หรือ 192.168.1.10">
                     </div>
+                    <input type="hidden" id="settingsDbPort" value="3307">
                     <div class="setting-grid">
                         <div class="setting-field">
                             <label for="settingsDbName">Database Name</label>
                             <input type="text" id="settingsDbName" placeholder="เช่น ini76">
                         </div>
-                        <input type="hidden" id="settingsDbPort" value="3307">
-                    </div>
-                    <div class="settings-inline">
-                        <button type="button" class="btn btn-neutral" id="testDbConnectionBtn">ทดสอบการเชื่อมต่อ</button>
-                        <div class="setting-help"></div>
+                        <div class="setting-field" style="justify-content:flex-end">
+                            <button type="button" class="btn btn-neutral" id="testDbConnectionBtn" style="width:100%;margin-top:22px">ทดสอบการเชื่อมต่อ</button>
+                        </div>
                     </div>
                 </div>
             </div>
