@@ -1108,18 +1108,32 @@ function getStationFilter()
 }
 
 // เพิ่ม WHERE clause สำหรับ SaleMode และ Zone filter
-// $needZoneJoin ถูก set เป็น true ถ้าต้องการ LEFT JOIN tableno tn
+// logic: TableID > 0 = มีโต๊ะ → โซนตัดสิน (ผ่าน SaleMode filter เสมอ)
+//        TableID = 0  = ไม่มีโต๊ะ → SaleMode ตัดสิน
 function appendSaleModeZoneFilter(array &$where, array $saleModeIds, array $zoneIds, &$needZoneJoin)
 {
-    if (!empty($saleModeIds)) {
-        $safe = implode(',', array_map('intval', $saleModeIds));
-        $where[] = "opf.SaleModeID IN ({$safe})";
-    }
-    if (!empty($zoneIds)) {
+    $hasSaleMode = !empty($saleModeIds);
+    $hasZone     = !empty($zoneIds);
+
+    if ($hasZone && $hasSaleMode) {
+        // ทั้งคู่: โต๊ะในโซน = ผ่านเสมอ, TableID=0 = กรองด้วย SaleMode
         $needZoneJoin = true;
-        $safe = implode(',', array_map('intval', $zoneIds));
-        // รายการที่ไม่มีโต๊ะ (Takeaway/Delivery ที่ไม่มี TableID) ผ่านเสมอ
-        $where[] = "(opf.TableID IS NULL OR opf.TableID = 0 OR tn.ZoneID IN ({$safe}))";
+        $safeZones = implode(',', array_map('intval', $zoneIds));
+        $safeModes = implode(',', array_map('intval', $saleModeIds));
+        $where[] = "(" .
+            "(opf.TableID > 0 AND tn.ZoneID IN ({$safeZones}))" .
+            " OR " .
+            "(opf.TableID = 0 AND opf.SaleModeID IN ({$safeModes}))" .
+        ")";
+    } elseif ($hasZone) {
+        // แค่ zone: TableID=0 ผ่านเสมอ
+        $needZoneJoin = true;
+        $safeZones = implode(',', array_map('intval', $zoneIds));
+        $where[] = "(opf.TableID = 0 OR tn.ZoneID IN ({$safeZones}))";
+    } elseif ($hasSaleMode) {
+        // แค่ SaleMode: กรองทุก order ไม่ว่ามีโต๊ะหรือไม่
+        $safeModes = implode(',', array_map('intval', $saleModeIds));
+        $where[] = "opf.SaleModeID IN ({$safeModes})";
     }
 }
 
