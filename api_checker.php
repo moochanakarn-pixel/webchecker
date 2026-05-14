@@ -143,6 +143,22 @@ function requestedAction()
     return preg_replace('/[^a-z0-9_]/', '', $act) ?: 'list';
 }
 
+// แปลง comma-separated string หรือ array → array ของ int ที่ > 0
+function parseIdList($value)
+{
+    if (is_array($value)) {
+        return array_values(array_unique(array_filter(array_map('intval', $value), function($v) { return $v > 0; })));
+    }
+    $str = trim((string)$value);
+    if ($str === '') return array();
+    $ids = array();
+    foreach (explode(',', $str) as $p) {
+        $id = (int)trim($p);
+        if ($id > 0) $ids[] = $id;
+    }
+    return array_values(array_unique($ids));
+}
+
 function normalizeSystemSettingsPayload($source)
 {
     return array(
@@ -160,6 +176,8 @@ function normalizeSystemSettingsPayload($source)
         'kds_two_step_checkout' => !empty($source['kds_two_step_checkout']) ? 1 : 0,
         'zone_lock' => !empty($source['zone_lock']) ? 1 : 0,
         'out_of_stock_enabled' => isset($source['out_of_stock_enabled']) ? (!empty($source['out_of_stock_enabled']) ? 1 : 0) : 1,
+        'allowed_sale_mode_ids' => parseIdList($source['allowed_sale_mode_ids'] ?? ''),
+        'allowed_zone_ids' => parseIdList($source['allowed_zone_ids'] ?? ''),
     );
 }
 
@@ -214,6 +232,8 @@ function systemSettingsSnapshot()
         'kds_two_step_checkout' => !empty(localSetting($local, 'kds_two_step_checkout', defined('KDS_TWO_STEP_CHECKOUT_DEFAULT') ? KDS_TWO_STEP_CHECKOUT_DEFAULT : false)) ? 1 : 0,
         'zone_lock' => !empty(localSetting($local, 'zone_lock', false)) ? 1 : 0,
         'out_of_stock_enabled' => (localSetting($local, 'out_of_stock_enabled', 1) !== 0) ? 1 : 0,
+        'allowed_sale_mode_ids' => parseIdList(localSetting($local, 'allowed_sale_mode_ids', array())),
+        'allowed_zone_ids' => parseIdList(localSetting($local, 'allowed_zone_ids', array())),
     );
 }
 
@@ -306,6 +326,8 @@ function writeSystemSettingsFile($settings)
         'kds_two_step_checkout' => !empty($settings['kds_two_step_checkout']) ? 1 : 0,
         'zone_lock' => !empty($settings['zone_lock']) ? 1 : 0,
         'out_of_stock_enabled' => isset($settings['out_of_stock_enabled']) ? (!empty($settings['out_of_stock_enabled']) ? 1 : 0) : 1,
+        'allowed_sale_mode_ids' => parseIdList($settings['allowed_sale_mode_ids'] ?? ''),
+        'allowed_zone_ids' => parseIdList($settings['allowed_zone_ids'] ?? ''),
     ));
 
     $content = "<?php\nreturn " . var_export($next, true) . ";\n";
@@ -441,6 +463,30 @@ function handleListShops()
     }
 }
 
+function handleListSaleModes()
+{
+    try {
+        $snapshot = systemSettingsSnapshot();
+        $conn = connectWithSystemSettings($snapshot);
+        // เฉพาะ SaleMode ที่ยังไม่ถูกลบ (Deleted = 0) = เปิดใช้งานอยู่
+        $sql = "SELECT SaleModeID, SaleModeName FROM salemode WHERE Deleted = 0 ORDER BY SaleModeID ASC";
+        $result = $conn->query($sql);
+        $modes = array();
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $modes[] = array(
+                    'sale_mode_id' => (int)$row['SaleModeID'],
+                    'sale_mode_name' => (string)$row['SaleModeName'],
+                );
+            }
+        }
+        $conn->close();
+        jsonResponse(array('success' => true, 'sale_modes' => $modes));
+    } catch (Throwable $e) {
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+    }
+}
+
 function handleListZones()
 {
     try {
@@ -569,6 +615,11 @@ try {
 
     if ($method === 'GET' && $action === 'list_shops') {
         handleListShops();
+        exit;
+    }
+
+    if ($method === 'GET' && $action === 'list_sale_modes') {
+        handleListSaleModes();
         exit;
     }
 
@@ -1044,6 +1095,48 @@ function appendAllowedPrinterFilter(array &$where, array $allowedPrinterIds, $al
     $where[] = $alias . '.PrinterID IN (' . implode(', ', $safeIds) . ')';
 }
 
+// โหลด filter SaleMode + Zone จาก settings.local.php ของสถานีนี้
+function getStationFilter()
+{
+    $settingsPath = resolveKdsSettingsPath();
+    $local = is_file($settingsPath) ? (require $settingsPath) : array();
+    if (!is_array($local)) $local = array();
+    return array(
+        'allowed_sale_mode_ids' => parseIdList(isset($local['allowed_sale_mode_ids']) ? $local['allowed_sale_mode_ids'] : array()),
+        'allowed_zone_ids' => parseIdList(isset($local['allowed_zone_ids']) ? $local['allowed_zone_ids'] : array()),
+    );
+}
+
+// เพิ่ม WHERE clause สำหรับ SaleMode และ Zone filter
+// logic: TableID > 0 = มีโต๊ะ → โซนตัดสิน (ผ่าน SaleMode filter เสมอ)
+//        TableID = 0  = ไม่มีโต๊ะ → SaleMode ตัดสิน
+function appendSaleModeZoneFilter(array &$where, array $saleModeIds, array $zoneIds, &$needZoneJoin)
+{
+    $hasSaleMode = !empty($saleModeIds);
+    $hasZone     = !empty($zoneIds);
+
+    if ($hasZone && $hasSaleMode) {
+        // ทั้งคู่: โต๊ะในโซน = ผ่านเสมอ, TableID=0 = กรองด้วย SaleMode
+        $needZoneJoin = true;
+        $safeZones = implode(',', array_map('intval', $zoneIds));
+        $safeModes = implode(',', array_map('intval', $saleModeIds));
+        $where[] = "(" .
+            "(opf.TableID > 0 AND tn.ZoneID IN ({$safeZones}))" .
+            " OR " .
+            "(opf.TableID = 0 AND opf.SaleModeID IN ({$safeModes}))" .
+        ")";
+    } elseif ($hasZone) {
+        // แค่ zone: TableID=0 ผ่านเสมอ
+        $needZoneJoin = true;
+        $safeZones = implode(',', array_map('intval', $zoneIds));
+        $where[] = "(opf.TableID = 0 OR tn.ZoneID IN ({$safeZones}))";
+    } elseif ($hasSaleMode) {
+        // แค่ SaleMode: กรองทุก order ไม่ว่ามีโต๊ะหรือไม่
+        $safeModes = implode(',', array_map('intval', $saleModeIds));
+        $where[] = "opf.SaleModeID IN ({$safeModes})";
+    }
+}
+
 function buildStats($activeRows, $finishedRows)
 {
     $activeCount = count($activeRows);
@@ -1062,6 +1155,7 @@ function buildStats($activeRows, $finishedRows)
 function fetchActiveRows($conn)
 {
     $allowedPrinterIds = fetchAllowedPrinterIds($conn, getEffectiveComputerId());
+    $stationFilter = getStationFilter();
 
     // รวม voided/deleted (98) ด้วยเพื่อแสดงสีเทา
     $statusList = implode(', ', array(
@@ -1074,6 +1168,12 @@ function fetchActiveRows($conn)
     if (ACTIVE_ROWS_TODAY_ONLY) {
         $where[] = "opf.OrderDate = '" . date('Y-m-d') . "'";
     }
+    $needZoneJoin = false;
+    appendSaleModeZoneFilter($where, $stationFilter['allowed_sale_mode_ids'], $stationFilter['allowed_zone_ids'], $needZoneJoin);
+
+    $zoneJoinSql = $needZoneJoin
+        ? "\n        LEFT JOIN tableno tn ON tn.TableID = opf.TableID AND tn.Deleted = 0"
+        : '';
 
     $activeSql = "
         SELECT
@@ -1107,14 +1207,11 @@ function fetchActiveRows($conn)
                    AND otf2.TransactionStatusID = 7
                    AND DATE(otf2.OpenTime) = opf.OrderDate
                  LIMIT 1),
-            0) AS TransactionStatusID,
-            COALESCE(pr.displayflexibleproductatchecker, 0) AS display_mode
+            0) AS TransactionStatusID
         FROM orderprocessdetailfront opf
         LEFT JOIN salemode sm
             ON sm.SaleModeID = opf.SaleModeID
-           AND sm.Deleted = 0
-        LEFT JOIN products pr
-            ON pr.ProductID = opf.ProductID
+           AND sm.Deleted = 0" . $zoneJoinSql . "
         WHERE " . implode(' AND ', $where) . "
         ORDER BY
             opf.SubmitOrderDateTime ASC,
@@ -1130,6 +1227,7 @@ function fetchActiveRows($conn)
 function fetchFinishedRows($conn)
 {
     $allowedPrinterIds = fetchAllowedPrinterIds($conn, getEffectiveComputerId());
+    $stationFilter = getStationFilter();
 
     $where = array('opf.ProcessStatus = ' . (int)PROCESS_STATUS_FINISHED);
     appendAllowedPrinterFilter($where, $allowedPrinterIds, 'opf');
@@ -1137,6 +1235,12 @@ function fetchFinishedRows($conn)
         $today = date('Y-m-d');
         $where[] = "(opf.OrderDate = '{$today}' OR (opf.FinishDateTime >= '{$today}' AND opf.FinishDateTime < DATE_ADD('{$today}', INTERVAL 1 DAY)))";
     }
+    $needZoneJoin = false;
+    appendSaleModeZoneFilter($where, $stationFilter['allowed_sale_mode_ids'], $stationFilter['allowed_zone_ids'], $needZoneJoin);
+
+    $zoneJoinSql = $needZoneJoin
+        ? "\n        LEFT JOIN tableno tn ON tn.TableID = opf.TableID AND tn.Deleted = 0"
+        : '';
 
     $finishedSql = "
         SELECT
@@ -1165,7 +1269,7 @@ function fetchFinishedRows($conn)
         FROM orderprocessdetailfront opf
         LEFT JOIN salemode sm
             ON sm.SaleModeID = opf.SaleModeID
-           AND sm.Deleted = 0
+           AND sm.Deleted = 0" . $zoneJoinSql . "
         WHERE " . implode(' AND ', $where) . "
         ORDER BY
             opf.FinishDateTime DESC,
@@ -1278,35 +1382,24 @@ function mergeChildProcessRowsIntoParents($rows)
             $rows[$parentIndex]['comments'] = appendProcessRowAsComment($rows[$parentIndex]['comments'], $row);
             $hiddenChildren[$index] = true;
         } else {
-            // display_mode จาก parent: 1 = แสดงเฉพาะหัว, 0 = แสดงเฉพาะลูก (default)
-            $displayMode = isset($parentRow['display_mode']) ? (int)$parentRow['display_mode'] : 0;
+            // สินค้าชุด (SETA) → การ์ดแยกพร้อม parent_name + inherit status จาก parent
+            $newCard                        = $row;
+            $newCard['parent_name']         = trim((string)(isset($parentRow['ProductName']) ? $parentRow['ProductName'] : ''));
+            $newCard['comments']            = array();
+            $newCard['TableID']             = $parentRow['TableID'];
+            $newCard['DisplayTableName']    = $parentRow['DisplayTableName'];
+            $newCard['OrderNo']             = $parentRow['OrderNo'];
+            $newCard['SaleModeID']          = $parentRow['SaleModeID'];
+            $newCard['SaleModeName']        = isset($parentRow['SaleModeName']) ? $parentRow['SaleModeName'] : '-';
+            $newCard['SubmitOrderDateTime'] = $parentRow['SubmitOrderDateTime'];
+            // inherit flags พิเศษจาก parent
+            if (!empty($parentRow['is_voided']))   $newCard['is_voided']   = true;
+            if (!empty($parentRow['is_moved']))    { $newCard['is_moved']  = true;  $newCard['moved_to'] = $parentRow['moved_to']; }
+            if (!empty($parentRow['is_combined'])) $newCard['is_combined'] = true;
 
-            if ($displayMode === 1) {
-                // โหมดหัวเดียว: ซ่อนลูก คงหัวไว้ (user checkout ที่การ์ดหัวโดยตรง)
-                $hiddenChildren[$index] = true;
-                // ทำ track ว่าหัวนี้ยังมีลูก active (ใช้ป้องกันหัวหายก่อนเวลา)
-                if (!isset($insertsByParent[$parentIndex])) {
-                    $insertsByParent[$parentIndex] = array();
-                }
-            } else {
-                // โหมดลูก (default): สร้างการ์ดลูก + ซ่อนหัว
-                $newCard                        = $row;
-                $newCard['parent_name']         = trim((string)(isset($parentRow['ProductName']) ? $parentRow['ProductName'] : ''));
-                $newCard['comments']            = array();
-                $newCard['TableID']             = $parentRow['TableID'];
-                $newCard['DisplayTableName']    = $parentRow['DisplayTableName'];
-                $newCard['OrderNo']             = $parentRow['OrderNo'];
-                $newCard['SaleModeID']          = $parentRow['SaleModeID'];
-                $newCard['SaleModeName']        = isset($parentRow['SaleModeName']) ? $parentRow['SaleModeName'] : '-';
-                $newCard['SubmitOrderDateTime'] = $parentRow['SubmitOrderDateTime'];
-                if (!empty($parentRow['is_voided']))   $newCard['is_voided']   = true;
-                if (!empty($parentRow['is_moved']))    { $newCard['is_moved']  = true;  $newCard['moved_to'] = $parentRow['moved_to']; }
-                if (!empty($parentRow['is_combined'])) $newCard['is_combined'] = true;
-
-                $insertsByParent[$parentIndex][] = $newCard;
-                $hiddenParents[$parentIndex]     = true;
-                $hiddenChildren[$index]          = true;
-            }
+            $insertsByParent[$parentIndex][] = $newCard;
+            $hiddenParents[$parentIndex]     = true;
+            $hiddenChildren[$index]          = true;
         }
     }
 
@@ -1314,7 +1407,6 @@ function mergeChildProcessRowsIntoParents($rows)
     foreach ($rows as $index => $row) {
         if (isset($hiddenChildren[$index])) continue;
         if (isset($hiddenParents[$index])) {
-            // โหมดลูก: แสดงการ์ดลูก (ถ้ามี) แล้วข้ามหัว
             if (isset($insertsByParent[$index])) {
                 foreach ($insertsByParent[$index] as $card) {
                     $visibleRows[] = $card;
@@ -1322,19 +1414,6 @@ function mergeChildProcessRowsIntoParents($rows)
             }
             continue;
         }
-
-        // ป้องกันหัว SET (mode 0) โผล่เมื่อลูกทุกตัว checkout แล้ว:
-        // ถ้าหัวไม่ได้ถูก hiddenParents (ไม่มีลูก active ใน result นี้เลย)
-        // และเป็น SET product (ProductSetType = 7) และ display_mode = 0
-        // → ลูกหมดหมดแล้ว ไม่ต้องแสดงหัว
-        $rowProductSetType = isset($row['ProductSetType']) ? (int)$row['ProductSetType'] : 0;
-        $rowParentPid      = isset($row['ParentProcessID']) ? (int)$row['ParentProcessID'] : 0;
-        $rowDisplayMode    = isset($row['display_mode']) ? (int)$row['display_mode'] : 0;
-
-        if ($rowProductSetType === 7 && $rowParentPid === 0 && $rowDisplayMode === 0) {
-            continue;
-        }
-
         $visibleRows[] = $row;
     }
 
@@ -1772,23 +1851,6 @@ function checkoutOne($conn)
 
             applyCheckoutSplit($conn, $childRow, $childQtyToFinish, $finishStaffId, $now);
         }
-
-        // ถ้า row ที่ checkout เป็นลูก SET → ตรวจว่าเหลือพี่น้อง active อยู่มั้ย
-        // ถ้าไม่เหลือ (ลูกตัวสุดท้าย) → auto-checkout พ่อด้วย ป้องกันพ่อโผล่เป็นการ์ดเดี่ยว
-        $rowParentProcessId = isset($row['ParentProcessID']) ? (int)$row['ParentProcessID'] : 0;
-        if ($rowParentProcessId > 0) {
-            $remainingSiblings = fetchLockedChildRows($conn, (int)$row['ProductLevelID'], $rowParentProcessId, (int)$row['PrinterID'], array(PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS));
-            if (empty($remainingSiblings)) {
-                $parentRows = fetchLockedRowsByProcessId($conn, (int)$row['ProductLevelID'], $rowParentProcessId, (int)$row['PrinterID'], array(PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS));
-                foreach ($parentRows as $parentRow) {
-                    $parentQty = isset($parentRow['ProductAmount']) ? (float)$parentRow['ProductAmount'] : 0;
-                    if ($parentQty > 0) {
-                        applyCheckoutSplit($conn, $parentRow, 1, $finishStaffId, $now);
-                    }
-                }
-            }
-        }
-
         $conn->commit();
 
         $menuName = isset($row['ProductName']) ? (string)$row['ProductName'] : '-';
@@ -2487,35 +2549,6 @@ function fetchLockedChildRows($conn, $productLevelId, $parentProcessId, $printer
         throw new Exception('Prepare failed: ' . $conn->error);
     }
     $stmt->bind_param('iii', $productLevelId, $parentProcessId, $printerId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $rows = array();
-    while ($result && ($row = $result->fetch_assoc())) {
-        $rows[] = $row;
-    }
-    $stmt->close();
-
-    return $rows;
-}
-
-function fetchLockedRowsByProcessId($conn, $productLevelId, $processId, $printerId, $statuses)
-{
-    $statusSql = implode(', ', array_map('intval', $statuses));
-    $sql = "
-        SELECT *
-        FROM orderprocessdetailfront
-        WHERE ProductLevelID = ?
-          AND ProcessID = ?
-          AND PrinterID = ?
-          AND ProcessStatus IN (" . $statusSql . ")
-        ORDER BY SubProcessID ASC
-        FOR UPDATE
-    ";
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new Exception('Prepare failed: ' . $conn->error);
-    }
-    $stmt->bind_param('iii', $productLevelId, $processId, $printerId);
     $stmt->execute();
     $result = $stmt->get_result();
     $rows = array();

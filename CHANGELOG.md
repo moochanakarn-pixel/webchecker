@@ -2,6 +2,26 @@
 
 ---
 
+## v1.7.0 — 2026-05-14
+
+### 🆕 Features
+- **[Filter] กรอง SaleMode ต่อสถานี** — แต่ละ KDS เลือก SaleMode ที่ต้องการแสดงได้ผ่าน Settings → บันทึกลง `settings.local.php` → กรองฝั่ง server ก่อนส่งข้อมูล (ไม่เลือก = แสดงทั้งหมด)
+- **[Filter] กรองโซนต่อสถานี (server-side)** — เพิ่ม zone filter ฝั่ง server (`allowed_zone_ids`) แยกจาก zone selector บน topbar — บันทึกลง `settings.local.php` ถาวร ไม่หายเมื่อ refresh
+- **[Filter] Smart SaleMode + Zone logic** — เมื่อตั้งทั้ง 2 filter พร้อมกัน: `TableID > 0` (มีโต๊ะในโซน) ผ่านเสมอโดยไม่สนใจ SaleMode, `TableID = 0` (ไม่มีโต๊ะ) กรองด้วย SaleMode — รองรับกรณี TW ลงโต๊ะข้ามโซน
+
+### 🐛 Bug Fixes
+- **[UI] Filter chip double-toggle** — แก้ `<label>` + `<input type="checkbox">` toggle ซ้ำกัน (browser synthetic click + handler) ทำให้ chip ไม่บันทึกค่า — เพิ่ม `e.preventDefault()`
+- **[Zone Lock] localStorage หาย → zone รีเซ็ตเป็น "ทั้งหมด"** — เมื่อ `zone_lock=ON` และ localStorage ถูกล้าง ระบบจะ auto-select zone แรกจาก `allowed_zone_ids` อัตโนมัติ (รองรับทั้งกรณี `kdsStartupCheck` หรือ `loadZones` เสร็จก่อน)
+
+### ⚙️ API
+- เพิ่ม action `list_sale_modes` — ดึง SaleMode ที่ `Deleted = 0` จาก DB
+- `normalizeSystemSettingsPayload`, `systemSettingsSnapshot`, `writeSystemSettingsFile` รองรับ field `allowed_sale_mode_ids` และ `allowed_zone_ids` (เก็บเป็น PHP array ใน `settings.local.php`)
+- เพิ่ม `parseIdList()` — แปลง comma-separated string หรือ array → array ของ int
+- เพิ่ม `getStationFilter()` — โหลด filter ของสถานีจาก `settings.local.php` ตาม `kds_sub`
+- `fetchActiveRows` / `fetchFinishedRows` เพิ่ม `LEFT JOIN tableno` เฉพาะเมื่อ zone filter ใช้งาน
+
+---
+
 ## v1.6.0 — 2026-05-13
 
 ### 🆕 Features
