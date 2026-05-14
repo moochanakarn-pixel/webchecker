@@ -571,19 +571,15 @@ $_ckBase = _computeCheckerBase();
                         <label for="settingsDbHost">DB Host / IP</label>
                         <input type="text" id="settingsDbHost" placeholder="เช่น 127.0.0.1 หรือ 192.168.1.10">
                     </div>
+                    <input type="hidden" id="settingsDbPort" value="3307">
                     <div class="setting-grid">
                         <div class="setting-field">
                             <label for="settingsDbName">Database Name</label>
                             <input type="text" id="settingsDbName" placeholder="เช่น ini76">
                         </div>
-                        <div class="setting-field">
-                            <label for="settingsDbPort">Port</label>
-                            <input type="number" id="settingsDbPort" min="1" placeholder="3307">
+                        <div class="setting-field" style="justify-content:flex-end">
+                            <button type="button" class="btn btn-neutral" id="testDbConnectionBtn" style="width:100%;margin-top:22px">ทดสอบการเชื่อมต่อ</button>
                         </div>
-                    </div>
-                    <div class="settings-inline">
-                        <button type="button" class="btn btn-neutral" id="testDbConnectionBtn">ทดสอบการเชื่อมต่อ</button>
-                        <div class="setting-help"></div>
                     </div>
                 </div>
             </div>
@@ -1781,7 +1777,7 @@ $_ckBase = _computeCheckerBase();
 
         function applySystemSettingsToModal(settings, staffName, connectionMessage) {
             document.getElementById('settingsDbHost').value = String(settings.db_host || '');
-            document.getElementById('settingsDbPort').value = Number(settings.db_port || 3307);
+            // db_port locked to 3307 — no UI field
             document.getElementById('settingsDbName').value = String(settings.db_name || '');
             document.getElementById('settingsComputerId').value = Number(settings.current_computer_id || 0) || '';
             document.getElementById('settingsComputerName').value = String(settings.current_computer_name || '');
@@ -1880,6 +1876,19 @@ $_ckBase = _computeCheckerBase();
                 showSystemSettingsStatus(error.message || 'ทดสอบการเชื่อมต่อไม่สำเร็จ', 'error');
                 setStaffNameBox('');
             }
+        }
+
+        async function lookupComputerNameForSettings() {
+            const computerId = Number(document.getElementById('settingsComputerId').value || 0);
+            const nameInput = document.getElementById('settingsComputerName');
+            if (computerId <= 0) return;
+            try {
+                const response = await kdsApiFetch(_kdsBase + '/api_checker.php?action=lookup_computer_name&computer_id=' + encodeURIComponent(computerId) + '&_=' + Date.now(), { cache: 'no-store' });
+                const data = await response.json();
+                if (response.ok && data.success && data.computer_name) {
+                    nameInput.value = data.computer_name;
+                }
+            } catch (e) { /* ปล่อยให้กรอกเอง */ }
         }
 
         async function lookupStaffNameForSettings() {
@@ -2851,6 +2860,7 @@ $_ckBase = _computeCheckerBase();
             if (window.__settingsStaffTimer) clearTimeout(window.__settingsStaffTimer);
             window.__settingsStaffTimer = setTimeout(lookupStaffNameForSettings, 220);
         });
+        document.getElementById('settingsComputerId').addEventListener('change', lookupComputerNameForSettings);
         document.getElementById('timerSettingsBackdrop').addEventListener('click', closeTimerSettings);
         document.getElementById('finishedDrawerBackdrop').addEventListener('click', closeFinishedDrawer);
 
