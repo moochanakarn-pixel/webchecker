@@ -1590,6 +1590,10 @@ $_ckBase = _computeCheckerBase();
 
         async function saveTimerSettings() {
             const payload = collectSystemSettingsFromModal();
+            if (payload.hide_staff_login === 1 && !(payload.finish_staff_id > 0)) {
+                showSystemSettingsStatus('กรุณาตั้งค่า Staff Code ก่อนเปิดใช้งาน "ซ่อนช่อง Login พนักงาน"', 'error');
+                return;
+            }
             try {
                 const response = await kdsApiFetch(_kdsBase + '/api_checker.php', {
                     method: 'POST',
