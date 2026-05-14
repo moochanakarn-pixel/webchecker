@@ -471,17 +471,6 @@ $_ckBase = _computeCheckerBase();
                 <div><h1><?php echo h(APP_TITLE); ?></h1><div id="machineDisplayName" style="margin-top:4px;font-size:12px;opacity:.95;font-weight:bold;display:<?php echo $machineDisplayName !== '' ? 'block' : 'none'; ?>"><?php echo h($machineDisplayName); ?></div></div>
             </div>
             <div class="controls">
-                <button type="button" class="btn btn-accent" id="openSystemSettingsBtn" style="display:none">⚙️ ตั้งค่าระบบ</button>
-                <button type="button" class="btn btn-neutral" id="openSoldOutBtn">🥫 ปิดสินค้าหมด</button>
-                <button type="button" class="btn btn-neutral" id="openZoneBtn">📍 โซน: <span id="zoneLabel">ทั้งหมด</span></button>
-                <button type="button" class="btn btn-neutral" id="barcodeToggleBtn" title="เปิด/ปิดช่องสแกนบาร์โค้ด">🔍 สแกน</button>
-                <div class="barcode-tools" id="barcodeTools">
-                    <div class="field-card field-card-barcode">
-                        <label for="barcodeInput">สแกนบาร์โค้ด</label>
-                        <input type="text" id="barcodeInput" inputmode="numeric" autocomplete="off" placeholder="ยิงบาร์โค้ดแล้วเช็คเอาต์ทันที">
-                    </div>
-                    <button type="button" class="btn btn-neutral" id="openBarcodeCameraBtn">📷 สแกนกล้อง</button>
-                </div>
                 <div id="staffLoginArea" style="display:flex;align-items:center;gap:6px">
                     <input type="text" id="topStaffCodeInput" placeholder="Staff Code" autocomplete="off" style="text-transform:uppercase;width:110px;padding:6px 10px;border:1px solid var(--line,#e5e7eb);border-radius:8px;font-size:16px;background:#fff;color:#111">
                     <button type="button" class="btn btn-primary" id="topStaffLoginBtn" style="min-height:36px;padding:0 12px;font-size:13px">เข้าสู่ระบบ</button>
@@ -490,6 +479,17 @@ $_ckBase = _computeCheckerBase();
                     <span id="topStaffNameLabel" style="font-size:13px;font-weight:bold;color:#fff;background:rgba(0,0,0,.18);padding:4px 10px;border-radius:8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
                     <button type="button" class="btn btn-ghost" id="topStaffLogoutBtn" style="min-height:36px;padding:0 10px;font-size:13px">ออกจากระบบ</button>
                 </div>
+                <button type="button" class="btn btn-accent" id="openSystemSettingsBtn" style="display:none">⚙️ ตั้งค่าระบบ</button>
+                <button type="button" class="btn btn-neutral" id="openSoldOutBtn">🥫 ปิดสินค้าหมด</button>
+                <button type="button" class="btn btn-neutral" id="barcodeToggleBtn" title="เปิด/ปิดช่องสแกนบาร์โค้ด">🔍 สแกน</button>
+                <div class="barcode-tools" id="barcodeTools">
+                    <div class="field-card field-card-barcode">
+                        <label for="barcodeInput">สแกนบาร์โค้ด</label>
+                        <input type="text" id="barcodeInput" inputmode="numeric" autocomplete="off" placeholder="ยิงบาร์โค้ดแล้วเช็คเอาต์ทันที">
+                    </div>
+                    <button type="button" class="btn btn-neutral" id="openBarcodeCameraBtn">📷 สแกนกล้อง</button>
+                </div>
+                <button type="button" class="btn btn-neutral" id="openZoneBtn">📍 โซน: <span id="zoneLabel">ทั้งหมด</span></button>
                 <button type="button" class="btn btn-ghost js-open-finished" id="openFinishedBtn">✅ เสร็จแล้ว <span id="topFinishedCount">0</span></button>
                 <button type="button" class="btn btn-primary" id="refreshBtn">🔄 รีเฟรช</button>
                 <button type="button" class="btn-fullscreen" id="fsBtn" title="เต็มจอ">
