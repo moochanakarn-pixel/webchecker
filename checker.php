@@ -447,6 +447,12 @@ $_ckBase = _computeCheckerBase();
         }
         .btn-fullscreen:hover{background:rgba(255,255,255,0.30);transform:scale(1.04)}
         .btn-fullscreen svg{width:15px;height:15px;flex-shrink:0}
+
+        /* fullscreen auto-hide UI */
+        .fs-ui-hidden .stats,
+        .fs-ui-hidden .panel-head { opacity:0; max-height:0; overflow:hidden; margin:0; padding:0; pointer-events:none; transition:opacity .35s, max-height .35s; }
+        .stats { max-height:80px; transition:opacity .35s, max-height .35s; }
+        .panel-head { max-height:80px; transition:opacity .35s, max-height .35s; }
 </style>
 </head>
 <body>
@@ -2747,11 +2753,30 @@ $_ckBase = _computeCheckerBase();
     (function(){
         var btn = document.getElementById("fsBtn");
         if(!btn) return;
+
+        var _fsHideTimer = null;
+        function _fsShowUI() {
+            document.body.classList.remove('fs-ui-hidden');
+            clearTimeout(_fsHideTimer);
+            if (document.fullscreenElement) {
+                _fsHideTimer = setTimeout(function() {
+                    document.body.classList.add('fs-ui-hidden');
+                }, 3000);
+            }
+        }
         function updateIcon(){
             var full = !!document.fullscreenElement;
             btn.querySelector(".fs-ico-enter").style.display = full ? "none" : "inline";
             btn.querySelector(".fs-ico-exit").style.display  = full ? "inline" : "none";
             btn.title = full ? "ออกจากเต็มจอ" : "เต็มจอ";
+            if (!full) {
+                clearTimeout(_fsHideTimer);
+                document.body.classList.remove('fs-ui-hidden');
+            } else {
+                _fsHideTimer = setTimeout(function() {
+                    document.body.classList.add('fs-ui-hidden');
+                }, 3000);
+            }
         }
         btn.addEventListener("click", function(){
             if(!document.fullscreenElement){
@@ -2761,6 +2786,8 @@ $_ckBase = _computeCheckerBase();
             }
         });
         document.addEventListener("fullscreenchange", updateIcon);
+        document.addEventListener("mousemove", _fsShowUI);
+        document.addEventListener("touchstart", _fsShowUI, { passive: true });
         updateIcon();
     })();
     </script>
