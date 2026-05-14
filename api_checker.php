@@ -177,6 +177,7 @@ function normalizeSystemSettingsPayload($source)
         'out_of_stock_enabled' => isset($source['out_of_stock_enabled']) ? (!empty($source['out_of_stock_enabled']) ? 1 : 0) : 1,
         'allowed_sale_mode_ids' => parseIdList($source['allowed_sale_mode_ids'] ?? ''),
         'allowed_zone_ids' => parseIdList($source['allowed_zone_ids'] ?? ''),
+        'hide_staff_login' => !empty($source['hide_staff_login']) ? 1 : 0,
     );
 }
 
@@ -232,6 +233,7 @@ function systemSettingsSnapshot()
         'out_of_stock_enabled' => (localSetting($local, 'out_of_stock_enabled', 1) !== 0) ? 1 : 0,
         'allowed_sale_mode_ids' => parseIdList(localSetting($local, 'allowed_sale_mode_ids', array())),
         'allowed_zone_ids' => parseIdList(localSetting($local, 'allowed_zone_ids', array())),
+        'hide_staff_login' => !empty(localSetting($local, 'hide_staff_login', false)) ? 1 : 0,
     );
 }
 
@@ -325,6 +327,7 @@ function writeSystemSettingsFile($settings)
         'out_of_stock_enabled' => isset($settings['out_of_stock_enabled']) ? (!empty($settings['out_of_stock_enabled']) ? 1 : 0) : 1,
         'allowed_sale_mode_ids' => parseIdList($settings['allowed_sale_mode_ids'] ?? ''),
         'allowed_zone_ids' => parseIdList($settings['allowed_zone_ids'] ?? ''),
+        'hide_staff_login' => !empty($settings['hide_staff_login']) ? 1 : 0,
     ));
 
     $content = "<?php\nreturn " . var_export($next, true) . ";\n";

@@ -623,6 +623,13 @@ $_ckBase = _computeCheckerBase();
                             <div class="settings-status show" id="settingsStaffNameBox">ยังไม่ได้เลือกพนักงาน</div>
                         </div>
                     </div>
+                    <label class="setting-check">
+                        <div>
+                            <div class="setting-check-title">ซ่อนช่อง Login พนักงานบน topbar</div>
+                            <div class="setting-check-sub">ใช้รหัสพนักงานด้านบนแทนการ login — เหมาะกับสถานีที่ไม่ต้องการให้เปลี่ยนพนักงาน</div>
+                        </div>
+                        <input type="checkbox" id="hideStaffLogin">
+                    </label>
                     <div class="setting-grid-2">
                         <div class="modal-row" style="margin-bottom:0">
                             <div class="modal-swatch yellow"></div>
@@ -795,7 +802,21 @@ $_ckBase = _computeCheckerBase();
         let isSubmitting = false;
         let noticeTimer = null;
         let activeRefreshTick = 0;
-        var staffIsLoggedIn = false; // var เพราะต้องแชร์ข้าม <script> block กับ staff login IIFE
+        var staffIsLoggedIn = false;   // var เพราะต้องแชร์ข้าม <script> block กับ staff login IIFE
+        var staffLoginHidden = false;  // true = ซ่อน topbar login, ใช้ finish_staff_id จาก settings แทน
+
+        function applyStaffLoginMode(hidden) {
+            staffLoginHidden = !!hidden;
+            var loginArea  = document.getElementById('staffLoginArea');
+            var loggedArea = document.getElementById('staffLoggedArea');
+            if (staffLoginHidden) {
+                staffIsLoggedIn = true;
+                if (loginArea)  loginArea.style.display  = 'none';
+                if (loggedArea) loggedArea.style.display = 'none';
+            } else {
+                // คืนสภาพให้ staff login IIFE จัดการ (ไม่ force show เพราะ IIFE มี state ของตัวเอง)
+            }
+        }
 
         function kdsLogActivity(actionType, detail, staffId) {
             const params = new URLSearchParams();
@@ -1770,6 +1791,8 @@ $_ckBase = _computeCheckerBase();
             if (twoStepInput) twoStepInput.checked = Number(settings.kds_two_step_checkout || 0) === 1;
             const outOfStockInput = document.getElementById('kdsOutOfStockEnabled');
             if (outOfStockInput) outOfStockInput.checked = settings.out_of_stock_enabled !== 0;
+            const hideStaffInput = document.getElementById('hideStaffLogin');
+            if (hideStaffInput) hideStaffInput.checked = Number(settings.hide_staff_login || 0) === 1;
             const barcodeScanVisibleInput = document.getElementById('barcodeScanVisible');
             if (barcodeScanVisibleInput) barcodeScanVisibleInput.checked = getBarcodeVisible();
             const cameraEnabledInput = document.getElementById('barcodeCameraEnabled');
@@ -1805,6 +1828,7 @@ $_ckBase = _computeCheckerBase();
                 barcode_camera_enabled: document.getElementById('barcodeCameraEnabled').checked ? 1 : 0,
                 kds_two_step_checkout: document.getElementById('kdsTwoStepCheckout').checked ? 1 : 0,
                 out_of_stock_enabled: (document.getElementById('kdsOutOfStockEnabled') || {}).checked ? 1 : 0,
+                hide_staff_login: (document.getElementById('hideStaffLogin') || {}).checked ? 1 : 0,
                 allowed_sale_mode_ids: state.saleModeChipsReady ? getFilterChipValues('saleModeFilterChips') : ((state.currentSystemSettings && state.currentSystemSettings.allowed_sale_mode_ids) || []),
                 allowed_zone_ids: state.zoneChipsReady ? getFilterChipValues('zoneFilterChips') : ((state.currentSystemSettings && state.currentSystemSettings.allowed_zone_ids) || []),
             };
@@ -1875,6 +1899,7 @@ $_ckBase = _computeCheckerBase();
             state.kdsTwoStepCheckout = !!payload.kds_two_step_checkout;
             applyBarcodeCameraAvailability();
             applyOutOfStockEnabled(payload.out_of_stock_enabled !== 0);
+            applyStaffLoginMode(payload.hide_staff_login === 1);
             setStaffNameBox(staffName || '');
         }
 
@@ -2930,6 +2955,7 @@ $_ckBase = _computeCheckerBase();
             .then(function(d) {
                 if (!d.success) { showDbErrorState('การตั้งค่าระบบไม่สมบูรณ์'); return; }
                 applyOutOfStockEnabled(d.settings.out_of_stock_enabled !== 0);
+                applyStaffLoginMode(Number(d.settings.hide_staff_login || 0) === 1);
                 var dbOk = (d.connection_message === 'เชื่อมต่อฐานข้อมูลปัจจุบันได้');
                 if (!dbOk) { showDbErrorState(d.connection_message); return; }
                 // DB OK — restore staff แล้วโหลดข้อมูล
@@ -3245,6 +3271,7 @@ $_ckBase = _computeCheckerBase();
 
         // restore staff — ถูกเรียกโดย kdsStartupCheck() หลังยืนยัน DB เชื่อมต่อสำเร็จ
         window.kdsDoStaffRestore = function() {
+            if (staffLoginHidden) return; // mode ล็อค — ไม่ต้อง restore, staffIsLoggedIn=true แล้ว
             var savedId    = localStorage.getItem('checker_finish_staff_id');
             var wasLoggedIn = localStorage.getItem('checker_staff_logged_in') === '1';
             if (wasLoggedIn && savedId && parseInt(savedId) > 0) {
