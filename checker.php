@@ -1200,24 +1200,11 @@ $_ckBase = _computeCheckerBase();
                 const reader = new FileReader();
                 reader.onload = function(ev) {
                     const ab = ev.target.result;
-                    const ctx = getAudioCtx();
-                    const doDecode = function() {
-                        ctx.decodeAudioData(ab.slice(0), function(buf) {
-                            if (soundSettings.lastKnownProcessIds === null) {
-                                soundSettings.lastKnownProcessIds = new Set((state.active_rows || []).map(function(r) { return String(r.ProcessID); }));
-                            }
-                            soundSettings.audioBuffer = buf;
-                            const fileNameSpan = document.getElementById('soundFileName');
-                            if (fileNameSpan) { fileNameSpan.textContent = '✅ ' + file.name + ' (อัปโหลด)'; fileNameSpan.className = 'sound-name loaded'; }
-                            const previewBtn = document.getElementById('soundPreviewBtn');
-                            if (previewBtn) previewBtn.disabled = false;
-                        }, function() { showNotice('ไม่สามารถโหลดไฟล์เสียงนี้ได้', 'error'); });
-                    };
-                    if (ctx.state === 'suspended') {
-                        ctx.resume().then(doDecode).catch(function() { doDecode(); });
-                    } else {
-                        doDecode();
-                    }
+                    _decodeSoundBuffer(ab.slice(0), function(buf) {
+                        soundSettings.audioBuffer = buf;
+                        _setSoundLoaded(file.name + ' (อัปโหลด)');
+                        saveSoundToCache(ab, file.name);
+                    }, function() { showNotice('ไม่สามารถโหลดไฟล์เสียงนี้ได้', 'error'); });
                 };
                 reader.readAsArrayBuffer(file);
             });
@@ -1236,50 +1223,99 @@ $_ckBase = _computeCheckerBase();
             });
         }
 
-        // ── โหลดเสียงจาก Server ──
-        async function loadServerSound() {
+        function _setSoundLoaded(label) {
             const fileNameSpan = document.getElementById('soundFileName');
             const previewBtn = document.getElementById('soundPreviewBtn');
-            let loaded = false;
+            const uploadRow = document.getElementById('soundUploadRow');
+            if (fileNameSpan) { fileNameSpan.textContent = '✅ ' + label; fileNameSpan.className = 'sound-name loaded'; }
+            if (previewBtn) previewBtn.disabled = false;
+            if (uploadRow) uploadRow.style.display = 'none';
+        }
 
+        function _showUploadUI(msg) {
+            const fileNameSpan = document.getElementById('soundFileName');
+            const previewBtn = document.getElementById('soundPreviewBtn');
+            const uploadRow = document.getElementById('soundUploadRow');
+            if (fileNameSpan) { fileNameSpan.textContent = msg; fileNameSpan.className = 'sound-name'; }
+            if (previewBtn) previewBtn.disabled = true;
+            if (uploadRow) uploadRow.style.display = '';
+        }
+
+        function _decodeSoundBuffer(ab, onSuccess, onError) {
+            const ctx = getAudioCtx();
+            const doDecode = function() {
+                ctx.decodeAudioData(ab, function(buf) {
+                    if (soundSettings.lastKnownProcessIds === null) {
+                        soundSettings.lastKnownProcessIds = new Set((state.active_rows || []).map(function(r) { return String(r.ProcessID); }));
+                    }
+                    onSuccess(buf);
+                }, onError || function() {});
+            };
+            if (ctx.state === 'suspended') {
+                ctx.resume().then(doDecode).catch(function() {
+                    document.addEventListener('click', function onFirstClick() {
+                        document.removeEventListener('click', onFirstClick);
+                        doDecode();
+                    }, { once: true });
+                });
+            } else {
+                doDecode();
+            }
+        }
+
+        // ── IndexedDB cache สำหรับไฟล์ที่ upload ──
+        function _openSoundDB() {
+            return new Promise(function(res, rej) {
+                const req = indexedDB.open('checker_sound_db', 1);
+                req.onupgradeneeded = function(e) { e.target.result.createObjectStore('sounds'); };
+                req.onsuccess = function(e) { res(e.target.result); };
+                req.onerror = function(e) { rej(e); };
+            });
+        }
+
+        async function saveSoundToCache(arrayBuffer, name) {
+            try {
+                const db = await _openSoundDB();
+                const tx = db.transaction('sounds', 'readwrite');
+                tx.objectStore('sounds').put({ buffer: arrayBuffer, name: name }, 'alert');
+            } catch(e) { console.warn('saveSoundToCache', e); }
+        }
+
+        async function loadCachedSound() {
+            try {
+                const db = await _openSoundDB();
+                const tx = db.transaction('sounds', 'readonly');
+                const req = tx.objectStore('sounds').get('alert');
+                req.onsuccess = function() {
+                    const rec = req.result;
+                    if (!rec) { _showUploadUI('ไม่พบไฟล์เสียง — เลือกไฟล์จากเครื่องได้เลย'); return; }
+                    _decodeSoundBuffer(rec.buffer.slice(0), function(buf) {
+                        soundSettings.audioBuffer = buf;
+                        _setSoundLoaded(rec.name + ' (บันทึกไว้)');
+                    }, function() { _showUploadUI('ไฟล์เสียงที่บันทึกไว้เสียหาย — เลือกใหม่ได้เลย'); });
+                };
+                req.onerror = function() { _showUploadUI('ไม่พบไฟล์เสียง — เลือกไฟล์จากเครื่องได้เลย'); };
+            } catch(e) { _showUploadUI('ไม่พบไฟล์เสียง — เลือกไฟล์จากเครื่องได้เลย'); }
+        }
+
+        // ── โหลดเสียงจาก Server → IndexedDB → Upload ──
+        async function loadServerSound() {
+            let loaded = false;
             for (const url of _serverSoundFiles) {
                 try {
                     const response = await fetch(url, { cache: 'no-cache' });
                     if (!response.ok) continue;
                     const arrayBuffer = await response.arrayBuffer();
-                    const ctx = getAudioCtx();
-                    const doDecode = function() {
-                        ctx.decodeAudioData(arrayBuffer.slice(0), function(buf) {
-                            if (soundSettings.lastKnownProcessIds === null) {
-                                soundSettings.lastKnownProcessIds = new Set((state.active_rows || []).map(function(r) { return String(r.ProcessID); }));
-                            }
-                            soundSettings.audioBuffer = buf;
-                            const fname = url.split('/').pop().split('?')[0];
-                            if (fileNameSpan) { fileNameSpan.textContent = '✅ ' + fname + ' (Server)'; fileNameSpan.className = 'sound-name loaded'; }
-                            if (previewBtn) previewBtn.disabled = false;
-                        }, function(err) { console.warn('decodeAudioData failed', err); });
-                    };
-                    if (ctx.state === 'suspended') {
-                        ctx.resume().then(doDecode).catch(function() {
-                            document.addEventListener('click', function onFirstClick() {
-                                document.removeEventListener('click', onFirstClick);
-                                loadServerSound();
-                            }, { once: true });
-                        });
-                    } else {
-                        doDecode();
-                    }
+                    _decodeSoundBuffer(arrayBuffer, function(buf) {
+                        soundSettings.audioBuffer = buf;
+                        const fname = url.split('/').pop().split('?')[0];
+                        _setSoundLoaded(fname + ' (Server)');
+                    }, function(err) { console.warn('decodeAudioData failed', err); });
                     loaded = true;
                     break;
                 } catch(e) { console.warn('loadServerSound failed:', url, e); }
             }
-
-            if (!loaded) {
-                if (fileNameSpan) { fileNameSpan.textContent = 'ไม่พบเสียงบน Server — เลือกไฟล์จากเครื่องได้เลย'; fileNameSpan.className = 'sound-name'; }
-                if (previewBtn) previewBtn.disabled = true;
-                const uploadRow = document.getElementById('soundUploadRow');
-                if (uploadRow) uploadRow.style.display = '';
-            }
+            if (!loaded) { loadCachedSound(); }
         }
 
         function initTimerThresholds() {
