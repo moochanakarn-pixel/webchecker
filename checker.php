@@ -59,9 +59,14 @@ $_ckBase = _computeCheckerBase();
         window._kdsBase        = <?php echo json_encode($_ckBase); ?>;
         window._kdsCid         = <?php echo (int)CURRENT_COMPUTER_ID; ?>;
         window._kdsSettingsSub = <?php echo json_encode($_ckSettingsSub); ?>;
-        function kdsApiFetch(url, opts) {
+        function kdsApiFetch(url, opts, timeoutMs) {
             var sep = url.indexOf('?') >= 0 ? '&' : '?';
-            return fetch(url + sep + 'kds_cid=' + _kdsCid + '&kds_sub=' + encodeURIComponent(_kdsSettingsSub), opts || {});
+            var fullUrl = url + sep + 'kds_cid=' + _kdsCid + '&kds_sub=' + encodeURIComponent(_kdsSettingsSub);
+            var ms = timeoutMs || 10000;
+            var controller = new AbortController();
+            var timer = setTimeout(function() { controller.abort(); }, ms);
+            var merged = Object.assign({}, opts || {}, { signal: controller.signal });
+            return fetch(fullUrl, merged).finally(function() { clearTimeout(timer); });
         }
     </script>
     <?php screenLockJavascript(); ?>
@@ -803,6 +808,8 @@ $_ckBase = _computeCheckerBase();
         let noticeTimer = null;
         let activeRefreshTick = 0;
         var staffIsLoggedIn = false;   // var เพราะต้องแชร์ข้าม <script> block กับ staff login IIFE
+        let _activeRowsLoading   = false;
+        let _finishedRowsLoading = false;
         var staffLoginHidden = false;  // true = ซ่อน topbar login, ใช้ finish_staff_id จาก settings แทน
 
         function applyStaffLoginMode(hidden) {
@@ -1948,6 +1955,8 @@ $_ckBase = _computeCheckerBase();
         }
 
         async function loadActiveRows(options) {
+            if (_activeRowsLoading) return;
+            _activeRowsLoading = true;
             options = options || {};
             const silent = !!options.silent;
             try {
@@ -1968,15 +1977,20 @@ $_ckBase = _computeCheckerBase();
                 setStatusText('พร้อมใช้งาน');
                 return true;
             } catch (error) {
+                if (error && error.name === 'AbortError') { setStatusText('หมดเวลา — รอรอบถัดไป'); return false; }
                 setStatusText('เกิดข้อผิดพลาด');
                 if (!silent) {
                     showNotice(error.message || 'โหลดคิวไม่สำเร็จ', 'error');
                 }
                 return false;
+            } finally {
+                _activeRowsLoading = false;
             }
         }
 
         async function loadFinishedRows(options) {
+            if (_finishedRowsLoading) return;
+            _finishedRowsLoading = true;
             options = options || {};
             const silent = !!options.silent;
             try {
@@ -1996,6 +2010,8 @@ $_ckBase = _computeCheckerBase();
                     showNotice(error.message || 'โหลดรายการเสร็จไม่สำเร็จ', 'error');
                 }
                 return false;
+            } finally {
+                _finishedRowsLoading = false;
             }
         }
 
@@ -2423,7 +2439,7 @@ $_ckBase = _computeCheckerBase();
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
                     body: params.toString()
-                });
+                }, 20000);
                 const data = await response.json();
                 if (!response.ok || !data.success) {
                     throw new Error(data.error || 'checkout ไม่สำเร็จ');
@@ -2519,7 +2535,7 @@ $_ckBase = _computeCheckerBase();
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
                     body: params.toString()
-                });
+                }, 20000);
                 const data = await response.json();
                 if (!response.ok || !data.success) {
                     throw new Error(data.error || data.message || 'Barcode not found');
@@ -2568,7 +2584,7 @@ $_ckBase = _computeCheckerBase();
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
                     body: params.toString()
-                });
+                }, 20000);
                 const data = await response.json();
                 if (!response.ok || !data.success) {
                     throw new Error(data.error || 'จบสถานะไม่สำเร็จ');
@@ -2615,7 +2631,7 @@ $_ckBase = _computeCheckerBase();
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
                     body: params.toString()
-                });
+                }, 20000);
                 const data = await response.json();
                 if (!response.ok || !data.success) {
                     throw new Error(data.error || 'ย้อนกลับไม่สำเร็จ');
