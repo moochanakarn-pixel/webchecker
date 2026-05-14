@@ -807,6 +807,8 @@ $_ckBase = _computeCheckerBase();
             barcodeCameraOpen: false,
             systemSettingsLoaded: false,
             currentSystemSettings: null,
+            saleModeChipsReady: false,
+            zoneChipsReady: false,
             soldOutProducts: [],
             soldOutKeyword: '',
             kdsTwoStepCheckout: kdsTwoStepCheckoutDefault
@@ -1364,6 +1366,8 @@ $_ckBase = _computeCheckerBase();
             document.getElementById('systemSettingsStatusBox').className = 'settings-status';
             document.getElementById('systemSettingsStatusBox').textContent = '';
             state.timerSettingsOpen = true;
+            state.saleModeChipsReady = false;
+            state.zoneChipsReady = false;
             syncTimerSettingsState();
             try {
                 const [settingsRes, saleModesRes, zonesRes] = await Promise.all([
@@ -1377,10 +1381,14 @@ $_ckBase = _computeCheckerBase();
                 }
                 const saleModesData = saleModesRes.ok ? await saleModesRes.json() : {};
                 const zonesData = zonesRes.ok ? await zonesRes.json() : {};
-                const saleModes = (saleModesData.success && Array.isArray(saleModesData.sale_modes)) ? saleModesData.sale_modes : [];
-                const zones = (zonesData.success && Array.isArray(zonesData.zones)) ? zonesData.zones : [];
+                const saleModesFetched = saleModesRes.ok && saleModesData.success;
+                const zonesFetched = zonesRes.ok && zonesData.success;
+                const saleModes = (saleModesFetched && Array.isArray(saleModesData.sale_modes)) ? saleModesData.sale_modes : [];
+                const zones = (zonesFetched && Array.isArray(zonesData.zones)) ? zonesData.zones : [];
                 renderFilterChips('saleModeFilterChips', saleModes, 'sale_mode_id', 'sale_mode_name');
                 renderFilterChips('zoneFilterChips', zones, 'zoneid', 'zonename');
+                state.saleModeChipsReady = saleModesFetched;
+                state.zoneChipsReady = zonesFetched;
                 applySystemSettingsToModal(data.settings || {}, data.staff_name || '', data.connection_message || '');
                 state.systemSettingsLoaded = true;
                 state.currentSystemSettings = data.settings || {};
@@ -1680,8 +1688,8 @@ $_ckBase = _computeCheckerBase();
                 barcode_camera_enabled: document.getElementById('barcodeCameraEnabled').checked ? 1 : 0,
                 kds_two_step_checkout: document.getElementById('kdsTwoStepCheckout').checked ? 1 : 0,
                 out_of_stock_enabled: (document.getElementById('kdsOutOfStockEnabled') || {}).checked ? 1 : 0,
-                allowed_sale_mode_ids: getFilterChipValues('saleModeFilterChips'),
-                allowed_zone_ids: getFilterChipValues('zoneFilterChips'),
+                allowed_sale_mode_ids: state.saleModeChipsReady ? getFilterChipValues('saleModeFilterChips') : ((state.currentSystemSettings && state.currentSystemSettings.allowed_sale_mode_ids) || []),
+                allowed_zone_ids: state.zoneChipsReady ? getFilterChipValues('zoneFilterChips') : ((state.currentSystemSettings && state.currentSystemSettings.allowed_zone_ids) || []),
             };
         }
 
