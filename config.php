@@ -136,10 +136,10 @@ function getDbConfig()
 
     $local = getLocalSettings();
     $inlineConfig = array(
-        'host' => localSetting($local, 'db_host', '127.0.0.1'),
-        'port' => localSetting($local, 'db_port', 3307),
-        'name' => localSetting($local, 'db_name', 'ini76'),
-        'user' => localSetting($local, 'db_user', 'root'),
+        'host' => localSetting($local, 'db_host', ''),
+        'port' => localSetting($local, 'db_port', 3306),
+        'name' => localSetting($local, 'db_name', ''),
+        'user' => localSetting($local, 'db_user', ''),
         'pass' => localSetting($local, 'db_pass', ''),
     );
 
