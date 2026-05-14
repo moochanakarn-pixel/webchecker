@@ -525,6 +525,33 @@ function handleListZones()
     }
 }
 
+function handleLookupComputerName()
+{
+    $snapshot = systemSettingsSnapshot();
+    $computerId = isset($_REQUEST['computer_id']) ? (int)$_REQUEST['computer_id'] : 0;
+    if ($computerId <= 0) {
+        jsonResponse(array('success' => true, 'computer_name' => ''));
+        return;
+    }
+    try {
+        $conn = connectWithSystemSettings($snapshot);
+        $stmt = $conn->prepare('SELECT ComputerName FROM computername WHERE ComputerID = ? AND Deleted = 0 LIMIT 1');
+        if (!$stmt) {
+            throw new Exception('Prepare failed: ' . $conn->error);
+        }
+        $stmt->bind_param('i', $computerId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        $conn->close();
+        $name = ($row && isset($row['ComputerName'])) ? trim((string)$row['ComputerName']) : '';
+        jsonResponse(array('success' => true, 'computer_name' => $name));
+    } catch (Throwable $e) {
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+    }
+}
+
 function handleLookupStaffName()
 {
     $snapshot = systemSettingsSnapshot();
@@ -601,6 +628,11 @@ try {
 
     if ($method === 'GET' && $action === 'get_system_settings') {
         handleGetSystemSettings();
+        exit;
+    }
+
+    if ($method === 'GET' && $action === 'lookup_computer_name') {
+        handleLookupComputerName();
         exit;
     }
 

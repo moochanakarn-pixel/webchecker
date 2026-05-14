@@ -1879,6 +1879,19 @@ $_ckBase = _computeCheckerBase();
             }
         }
 
+        async function lookupComputerNameForSettings() {
+            const computerId = Number(document.getElementById('settingsComputerId').value || 0);
+            const nameInput = document.getElementById('settingsComputerName');
+            if (computerId <= 0) return;
+            try {
+                const response = await kdsApiFetch(_kdsBase + '/api_checker.php?action=lookup_computer_name&computer_id=' + encodeURIComponent(computerId) + '&_=' + Date.now(), { cache: 'no-store' });
+                const data = await response.json();
+                if (response.ok && data.success && data.computer_name) {
+                    nameInput.value = data.computer_name;
+                }
+            } catch (e) { /* ปล่อยให้กรอกเอง */ }
+        }
+
         async function lookupStaffNameForSettings() {
             const staffId = Number(document.getElementById('settingsFinishStaffId').value || 0);
             if (staffId <= 0) {
@@ -2848,6 +2861,7 @@ $_ckBase = _computeCheckerBase();
             if (window.__settingsStaffTimer) clearTimeout(window.__settingsStaffTimer);
             window.__settingsStaffTimer = setTimeout(lookupStaffNameForSettings, 220);
         });
+        document.getElementById('settingsComputerId').addEventListener('change', lookupComputerNameForSettings);
         document.getElementById('timerSettingsBackdrop').addEventListener('click', closeTimerSettings);
         document.getElementById('finishedDrawerBackdrop').addEventListener('click', closeFinishedDrawer);
 
