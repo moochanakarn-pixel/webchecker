@@ -2789,6 +2789,15 @@ $_ckBase = _computeCheckerBase();
             .then(function(d) {
                 if (!d.success) { showDbErrorState('การตั้งค่าระบบไม่สมบูรณ์'); return; }
                 applyZoneLock(!!d.settings.zone_lock);
+                window._kdsZoneLocked = !!d.settings.zone_lock;
+                window._kdsAllowedZoneIds = Array.isArray(d.settings.allowed_zone_ids) ? d.settings.allowed_zone_ids.map(Number) : [];
+                // zone_lock ON + localStorage หาย + zones โหลดแล้ว → force zone ทันที
+                if (window._kdsZoneLocked && window._kdsAllowedZoneIds.length > 0) {
+                    const curId = parseInt(localStorage.getItem('checker_zone_id') || '0');
+                    if (curId === 0 && typeof window.kdsForceZone === 'function') {
+                        window.kdsForceZone(window._kdsAllowedZoneIds[0]);
+                    }
+                }
                 applyOutOfStockEnabled(d.settings.out_of_stock_enabled !== 0);
                 var dbOk = (d.connection_message === 'เชื่อมต่อฐานข้อมูลปัจจุบันได้');
                 if (!dbOk) { showDbErrorState(d.connection_message); return; }
@@ -2970,6 +2979,16 @@ $_ckBase = _computeCheckerBase();
                         btn.textContent = '📍 ' + z.zonename;
                         zoneList.appendChild(btn);
                     });
+                    // อัปเดต label ถ้า zone ถูก force-set ก่อน zones โหลดเสร็จ
+                    if (currentZoneId > 0 && zoneLabel) {
+                        const zf = zones.find(function(zz) { return zz.zoneid === currentZoneId; });
+                        if (zf) zoneLabel.textContent = zf.zonename;
+                    }
+                    // zone_lock + ยังไม่มี zone → auto-select zone แรกจาก allowed list
+                    if (window._kdsZoneLocked && currentZoneId === 0 &&
+                        Array.isArray(window._kdsAllowedZoneIds) && window._kdsAllowedZoneIds.length > 0) {
+                        kdsForceZone(window._kdsAllowedZoneIds[0]);
+                    }
                 }
             } catch(e) { console.warn('load zones error', e); }
         }
@@ -3031,6 +3050,20 @@ $_ckBase = _computeCheckerBase();
                 applyZoneFilter();
             });
         }
+
+        // ตั้ง zone โดย force (ใช้เมื่อ lock หลุด localStorage หาย)
+        function kdsForceZone(zoneId) {
+            zoneId = parseInt(zoneId) || 0;
+            if (zoneId <= 0 || currentZoneId === zoneId) return;
+            currentZoneId = zoneId;
+            const zf = zones.find(function(zz) { return zz.zoneid === zoneId; });
+            currentZoneName = zf ? zf.zonename : ('Zone ' + zoneId);
+            if (zoneLabel) zoneLabel.textContent = currentZoneName;
+            localStorage.setItem('checker_zone_id', String(currentZoneId));
+            localStorage.setItem('checker_zone_name', currentZoneName);
+            filterCardsByZone(currentZoneId);
+        }
+        window.kdsForceZone = kdsForceZone;
 
         // คืนค่า zone จาก localStorage (จำ zone ข้ามรอบ refresh)
         (function restoreZone(){
