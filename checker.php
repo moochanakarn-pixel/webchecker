@@ -1251,24 +1251,12 @@ $_ckBase = _computeCheckerBase();
 
         function _decodeSoundBuffer(ab, onSuccess, onError) {
             const ctx = getAudioCtx();
-            const doDecode = function() {
-                ctx.decodeAudioData(ab, function(buf) {
-                    if (soundSettings.lastKnownProcessIds === null) {
-                        soundSettings.lastKnownProcessIds = new Set((state.active_rows || []).map(function(r) { return String(r.ProcessID); }));
-                    }
-                    onSuccess(buf);
-                }, onError || function() {});
-            };
-            if (ctx.state === 'suspended') {
-                ctx.resume().then(doDecode).catch(function() {
-                    document.addEventListener('click', function onFirstClick() {
-                        document.removeEventListener('click', onFirstClick);
-                        doDecode();
-                    }, { once: true });
-                });
-            } else {
-                doDecode();
-            }
+            ctx.decodeAudioData(ab, function(buf) {
+                if (soundSettings.lastKnownProcessIds === null) {
+                    soundSettings.lastKnownProcessIds = new Set((state.active_rows || []).map(function(r) { return String(r.ProcessID); }));
+                }
+                onSuccess(buf);
+            }, onError || function() {});
         }
 
         // ── IndexedDB cache สำหรับไฟล์ที่ upload ──
