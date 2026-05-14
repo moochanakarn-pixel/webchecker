@@ -1244,7 +1244,7 @@ $_ckBase = _computeCheckerBase();
 
             for (const url of _serverSoundFiles) {
                 try {
-                    const response = await fetch(url, { cache: 'force-cache' });
+                    const response = await fetch(url, { cache: 'no-cache' });
                     if (!response.ok) continue;
                     const arrayBuffer = await response.arrayBuffer();
                     const ctx = getAudioCtx();
