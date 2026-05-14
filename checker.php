@@ -202,8 +202,10 @@ $_ckBase = _computeCheckerBase();
         }
         .card{
             background:linear-gradient(180deg,#fff,#fbfdff);border:1px solid var(--line);
-            border-radius:16px;padding:10px;box-shadow:0 4px 12px rgba(17,56,92,.05)
+            border-radius:16px;padding:10px;box-shadow:0 4px 12px rgba(17,56,92,.05);
+            display:flex;flex-direction:column
         }
+        .card-actions{margin-top:auto}
         .card.warn-yellow{border-color:#ffe066;background:linear-gradient(180deg,#fffde7,#fffbf0);box-shadow:0 0 0 3px rgba(255,214,0,.18)}
         .card.warn-red   {border-color:#ffb3ab;background:linear-gradient(180deg,#fff2f0,#fff8f7);box-shadow:0 0 0 3px rgba(228,76,58,.14)}
         .card.checkout-soft{border-color:#ffd2a4;background:linear-gradient(180deg,#fffaf4,#fff1e4);box-shadow:0 0 0 3px rgba(255,138,31,.10)}
