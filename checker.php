@@ -471,16 +471,6 @@ $_ckBase = _computeCheckerBase();
                 <div><h1><?php echo h(APP_TITLE); ?></h1><div id="machineDisplayName" style="margin-top:4px;font-size:12px;opacity:.95;font-weight:bold;display:<?php echo $machineDisplayName !== '' ? 'block' : 'none'; ?>"><?php echo h($machineDisplayName); ?></div></div>
             </div>
             <div class="controls">
-                <button type="button" class="btn btn-accent" id="openSystemSettingsBtn" style="display:none">⚙️ ตั้งค่าระบบ</button>
-                <button type="button" class="btn btn-neutral" id="openSoldOutBtn">🥫 ปิดสินค้าหมด</button>
-                <button type="button" class="btn btn-neutral" id="openZoneBtn">📍 โซน: <span id="zoneLabel">ทั้งหมด</span></button>
-                <div class="barcode-tools" id="barcodeTools">
-                    <div class="field-card field-card-barcode">
-                        <label for="barcodeInput">สแกนบาร์โค้ด</label>
-                        <input type="text" id="barcodeInput" inputmode="numeric" autocomplete="off" placeholder="ยิงบาร์โค้ดแล้วเช็คเอาต์ทันที">
-                    </div>
-                    <button type="button" class="btn btn-neutral" id="openBarcodeCameraBtn">📷 สแกนกล้อง</button>
-                </div>
                 <div id="staffLoginArea" style="display:flex;align-items:center;gap:6px">
                     <input type="text" id="topStaffCodeInput" placeholder="Staff Code" autocomplete="off" style="text-transform:uppercase;width:110px;padding:6px 10px;border:1px solid var(--line,#e5e7eb);border-radius:8px;font-size:16px;background:#fff;color:#111">
                     <button type="button" class="btn btn-primary" id="topStaffLoginBtn" style="min-height:36px;padding:0 12px;font-size:13px">เข้าสู่ระบบ</button>
@@ -489,6 +479,17 @@ $_ckBase = _computeCheckerBase();
                     <span id="topStaffNameLabel" style="font-size:13px;font-weight:bold;color:#fff;background:rgba(0,0,0,.18);padding:4px 10px;border-radius:8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
                     <button type="button" class="btn btn-ghost" id="topStaffLogoutBtn" style="min-height:36px;padding:0 10px;font-size:13px">ออกจากระบบ</button>
                 </div>
+                <button type="button" class="btn btn-accent" id="openSystemSettingsBtn" style="display:none">⚙️ ตั้งค่าระบบ</button>
+                <button type="button" class="btn btn-neutral" id="openSoldOutBtn">🥫 ปิดสินค้าหมด</button>
+                <button type="button" class="btn btn-neutral" id="barcodeToggleBtn" title="เปิด/ปิดช่องสแกนบาร์โค้ด">🔍 สแกน</button>
+                <div class="barcode-tools" id="barcodeTools">
+                    <div class="field-card field-card-barcode">
+                        <label for="barcodeInput">สแกนบาร์โค้ด</label>
+                        <input type="text" id="barcodeInput" inputmode="numeric" autocomplete="off" placeholder="ยิงบาร์โค้ดแล้วเช็คเอาต์ทันที">
+                    </div>
+                    <button type="button" class="btn btn-neutral" id="openBarcodeCameraBtn">📷 สแกนกล้อง</button>
+                </div>
+                <button type="button" class="btn btn-neutral" id="openZoneBtn">📍 โซน: <span id="zoneLabel">ทั้งหมด</span></button>
                 <button type="button" class="btn btn-ghost js-open-finished" id="openFinishedBtn">✅ เสร็จแล้ว <span id="topFinishedCount">0</span></button>
                 <button type="button" class="btn btn-primary" id="refreshBtn">🔄 รีเฟรช</button>
                 <button type="button" class="btn-fullscreen" id="fsBtn" title="เต็มจอ">
@@ -905,6 +906,7 @@ $_ckBase = _computeCheckerBase();
         function focusBarcodeInput(selectText) {
             if (state.barcodeCameraOpen) return;
             if (isMobile()) return; // มือถือไม่ focus — กัน keyboard เปิด
+            if (!getBarcodeVisible()) return; // ซ่อนอยู่ → ไม่ focus
             const input = document.getElementById('barcodeInput');
             if (!input || !barcodeCheckoutEnabled) return;
             window.requestAnimationFrame(function() {
@@ -972,12 +974,44 @@ $_ckBase = _computeCheckerBase();
             }, 1200);
         }
 
+        const _barcodeVisibleKey = 'checker_barcode_visible_' + String(currentComputerIdFromConfig || 0);
+
+        function getBarcodeVisible() {
+            const v = localStorage.getItem(_barcodeVisibleKey);
+            return v === null ? true : v === '1';
+        }
+
+        function applyBarcodeVisible(visible) {
+            const tools = document.getElementById('barcodeTools');
+            const btn   = document.getElementById('barcodeToggleBtn');
+            if (tools) tools.style.display = visible ? '' : 'none';
+            if (btn) btn.classList.toggle('btn-primary', visible);
+            if (visible) focusBarcodeInput();
+        }
+
+        function initBarcodeToggle() {
+            const btn = document.getElementById('barcodeToggleBtn');
+            if (!btn || !barcodeCheckoutEnabled) {
+                if (btn) btn.style.display = 'none';
+                return;
+            }
+            const visible = getBarcodeVisible();
+            applyBarcodeVisible(visible);
+            btn.addEventListener('click', function() {
+                const next = !getBarcodeVisible();
+                localStorage.setItem(_barcodeVisibleKey, next ? '1' : '0');
+                applyBarcodeVisible(next);
+            });
+        }
+
         function initBarcodeSettings() {
             const input = document.getElementById('barcodeInput');
             const tools = document.getElementById('barcodeTools');
             barcodeCaptureState.preferredFacingMode = getPreferredBarcodeFacingMode();
             if (!barcodeCheckoutEnabled) {
                 if (tools) tools.style.display = 'none';
+                const btn = document.getElementById('barcodeToggleBtn');
+                if (btn) btn.style.display = 'none';
                 return;
             }
             applyBarcodeCameraAvailability();
@@ -986,7 +1020,7 @@ $_ckBase = _computeCheckerBase();
                 input.setAttribute('autocorrect', 'off');
                 input.setAttribute('spellcheck', 'false');
             }
-            focusBarcodeInput();
+            initBarcodeToggle();
         }
 
         async function switchBarcodeCameraFacing() {
