@@ -39,6 +39,7 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth_check.php';
+session_write_close(); // release session file lock — ไม่มีการเขียน session หลังจุดนี้
 
 // timeout
 @set_time_limit(30);
