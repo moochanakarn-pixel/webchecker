@@ -2754,27 +2754,12 @@ $_ckBase = _computeCheckerBase();
         var btn = document.getElementById("fsBtn");
         if(!btn) return;
 
-        var _fsHideTimer = null;
-        function _fsShowUI() {
-            document.body.classList.remove('fs-ui-hidden');
-            clearTimeout(_fsHideTimer);
-            if (document.fullscreenElement) {
-                _fsHideTimer = setTimeout(function() {
-                    document.body.classList.add('fs-ui-hidden');
-                }, 3000);
-            }
-        }
         function updateIcon(){
             var full = !!document.fullscreenElement;
             btn.querySelector(".fs-ico-enter").style.display = full ? "none" : "inline";
             btn.querySelector(".fs-ico-exit").style.display  = full ? "inline" : "none";
             btn.title = full ? "ออกจากเต็มจอ" : "เต็มจอ";
-            if (!full) {
-                clearTimeout(_fsHideTimer);
-                document.body.classList.remove('fs-ui-hidden');
-            } else {
-                document.body.classList.add('fs-ui-hidden');
-            }
+            document.body.classList.toggle('fs-ui-hidden', full);
         }
         btn.addEventListener("click", function(){
             if(!document.fullscreenElement){
@@ -2784,8 +2769,6 @@ $_ckBase = _computeCheckerBase();
             }
         });
         document.addEventListener("fullscreenchange", updateIcon);
-        document.addEventListener("mousemove", _fsShowUI);
-        document.addEventListener("touchstart", _fsShowUI, { passive: true });
         updateIcon();
     })();
     </script>
