@@ -35,7 +35,7 @@ $_ckBase = _computeCheckerBase();
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <link rel="manifest" href="<?php echo $_ckBase; ?>/manifest.php">
+    <link rel="manifest" href="<?php echo $_ckBase; ?>/manifest.php?from=<?php echo urlencode($_SERVER['SCRIPT_NAME']); ?>&base=<?php echo urlencode($_ckBase); ?>">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
