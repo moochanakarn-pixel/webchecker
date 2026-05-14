@@ -1515,10 +1515,11 @@ $_ckBase = _computeCheckerBase();
             state.zoneChipsReady = false;
             syncTimerSettingsState();
             try {
-                const [settingsRes, saleModesRes, zonesRes] = await Promise.all([
+                const [settingsRes, saleModesRes, zonesRes, shopsRes] = await Promise.all([
                     kdsApiFetch(_kdsBase + '/api_checker.php?action=get_system_settings&_=' + Date.now(), { cache: 'no-store' }),
                     kdsApiFetch(_kdsBase + '/api_checker.php?action=list_sale_modes&_=' + Date.now(), { cache: 'no-store' }),
                     kdsApiFetch(_kdsBase + '/api_checker.php?action=list_zones&_=' + Date.now(), { cache: 'no-store' }),
+                    kdsApiFetch(_kdsBase + '/api_checker.php?action=list_shops&_=' + Date.now(), { cache: 'no-store' }),
                 ]);
                 const data = await settingsRes.json();
                 if (!settingsRes.ok || !data.success) {
@@ -1526,6 +1527,7 @@ $_ckBase = _computeCheckerBase();
                 }
                 const saleModesData = saleModesRes.ok ? await saleModesRes.json() : {};
                 const zonesData = zonesRes.ok ? await zonesRes.json() : {};
+                const shopsData = shopsRes.ok ? await shopsRes.json() : {};
                 const saleModesFetched = saleModesRes.ok && saleModesData.success;
                 const zonesFetched = zonesRes.ok && zonesData.success;
                 const saleModes = (saleModesFetched && Array.isArray(saleModesData.sale_modes)) ? saleModesData.sale_modes : [];
@@ -1534,6 +1536,9 @@ $_ckBase = _computeCheckerBase();
                 renderFilterChips('zoneFilterChips', zones, 'zoneid', 'zonename');
                 state.saleModeChipsReady = saleModesFetched;
                 state.zoneChipsReady = zonesFetched;
+                if (shopsData.success && Array.isArray(shopsData.shops)) {
+                    populateShopDropdown(shopsData.shops, Number((data.settings || {}).shop_id || 0));
+                }
                 applySystemSettingsToModal(data.settings || {}, data.staff_name || '', data.connection_message || '');
                 state.systemSettingsLoaded = true;
                 state.currentSystemSettings = data.settings || {};
@@ -3050,30 +3055,11 @@ $_ckBase = _computeCheckerBase();
     </div>
 
     <script>
-    // ── Shop Loader ─────────────────────────────────────
+    // ── Shop Dropdown ────────────────────────────────────
     (function(){
         const shopSel  = document.getElementById('settingsShopId');
         const shopName = document.getElementById('settingsShopNameBox');
         if (!shopSel) return;
-
-        // โหลด shops เมื่อ settings modal เปิด
-        function loadShops(selectedId) {
-            kdsApiFetch(_kdsBase + '/api_checker.php?action=list_shops&_=' + Date.now(), { cache: 'no-store' })
-            .then(function(r){ return r.json(); })
-            .then(function(d){
-                if (!d.success || !d.shops) return;
-                // clear เดิม
-                while (shopSel.options.length > 1) shopSel.remove(1);
-                d.shops.forEach(function(s){
-                    const opt = document.createElement('option');
-                    opt.value = s.shop_id;
-                    opt.textContent = s.shop_id + ' — ' + s.shop_name;
-                    if (s.shop_id === selectedId) opt.selected = true;
-                    shopSel.appendChild(opt);
-                });
-                updateShopName();
-            }).catch(function(){});
-        }
 
         function updateShopName() {
             const opt = shopSel.options[shopSel.selectedIndex];
@@ -3085,20 +3071,20 @@ $_ckBase = _computeCheckerBase();
             }
         }
 
-        shopSel.addEventListener('change', updateShopName);
-
-        // โหลดเมื่อ settings modal เปิด
-        const settingsBtn = document.getElementById('openSystemSettingsBtn');
-        if (settingsBtn) {
-            settingsBtn.addEventListener('click', function(){
-                const saved = parseInt(localStorage.getItem('checker_shop_id') || '0');
-                loadShops(saved);
+        // เรียกจาก openTimerSettings() หลังได้ข้อมูลจาก server พร้อมกัน
+        window.populateShopDropdown = function(shops, selectedId) {
+            while (shopSel.options.length > 1) shopSel.remove(1);
+            shops.forEach(function(s) {
+                const opt = document.createElement('option');
+                opt.value = s.shop_id;
+                opt.textContent = s.shop_id + ' — ' + s.shop_name;
+                if (s.shop_id === selectedId) opt.selected = true;
+                shopSel.appendChild(opt);
             });
-        }
+            updateShopName();
+        };
 
-        // โหลดตอนเริ่ม (populate ก่อน)
-        const savedId = parseInt(localStorage.getItem('checker_shop_id') || '0');
-        loadShops(savedId);
+        shopSel.addEventListener('change', updateShopName);
     })();
 
     // ── Zone Filter ─────────────────────────────────────
