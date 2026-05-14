@@ -1781,6 +1781,9 @@ $_ckBase = _computeCheckerBase();
             document.getElementById('settingsDbName').value = String(settings.db_name || '');
             document.getElementById('settingsComputerId').value = Number(settings.current_computer_id || 0) || '';
             document.getElementById('settingsComputerName').value = String(settings.current_computer_name || '');
+            if (!settings.current_computer_name && Number(settings.current_computer_id || 0) > 0) {
+                lookupComputerNameForSettings();
+            }
             const shopSelEl = document.getElementById('settingsShopId');
             if (shopSelEl) shopSelEl.value = Number(settings.shop_id || 0) || 0;
             // update shop name box
@@ -2861,6 +2864,9 @@ $_ckBase = _computeCheckerBase();
             window.__settingsStaffTimer = setTimeout(lookupStaffNameForSettings, 220);
         });
         document.getElementById('settingsComputerId').addEventListener('change', lookupComputerNameForSettings);
+        document.getElementById('settingsComputerId').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); lookupComputerNameForSettings(); }
+        });
         document.getElementById('timerSettingsBackdrop').addEventListener('click', closeTimerSettings);
         document.getElementById('finishedDrawerBackdrop').addEventListener('click', closeFinishedDrawer);
 
