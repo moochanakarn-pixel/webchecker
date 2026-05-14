@@ -481,7 +481,6 @@ $_ckBase = _computeCheckerBase();
                 </div>
                 <button type="button" class="btn btn-accent" id="openSystemSettingsBtn" style="display:none">⚙️ ตั้งค่าระบบ</button>
                 <button type="button" class="btn btn-neutral" id="openSoldOutBtn">🥫 ปิดสินค้าหมด</button>
-                <button type="button" class="btn btn-neutral" id="barcodeToggleBtn" title="เปิด/ปิดช่องสแกนบาร์โค้ด">🔍 สแกน</button>
                 <div class="barcode-tools" id="barcodeTools">
                     <div class="field-card field-card-barcode">
                         <label for="barcodeInput">สแกนบาร์โค้ด</label>
@@ -663,6 +662,13 @@ $_ckBase = _computeCheckerBase();
                             </label>
                         </div>
                     </div>
+                    <label class="setting-check">
+                        <div>
+                            <div class="setting-check-title">แสดงช่องสแกนบาร์โค้ด</div>
+                            <div class="setting-check-sub">แสดงช่องกรอก / ยิงบาร์โค้ดบนแถบเครื่องมือ — ปิดในสถานีที่ไม่ต้องการสแกน</div>
+                        </div>
+                        <input type="checkbox" id="barcodeScanVisible">
+                    </label>
                     <label class="setting-check">
                         <div>
                             <div class="setting-check-title">เปิดสแกนกล้อง</div>
@@ -983,25 +989,8 @@ $_ckBase = _computeCheckerBase();
 
         function applyBarcodeVisible(visible) {
             const tools = document.getElementById('barcodeTools');
-            const btn   = document.getElementById('barcodeToggleBtn');
             if (tools) tools.style.display = visible ? '' : 'none';
-            if (btn) btn.classList.toggle('btn-primary', visible);
             if (visible) focusBarcodeInput();
-        }
-
-        function initBarcodeToggle() {
-            const btn = document.getElementById('barcodeToggleBtn');
-            if (!btn || !barcodeCheckoutEnabled) {
-                if (btn) btn.style.display = 'none';
-                return;
-            }
-            const visible = getBarcodeVisible();
-            applyBarcodeVisible(visible);
-            btn.addEventListener('click', function() {
-                const next = !getBarcodeVisible();
-                localStorage.setItem(_barcodeVisibleKey, next ? '1' : '0');
-                applyBarcodeVisible(next);
-            });
         }
 
         function initBarcodeSettings() {
@@ -1010,8 +999,6 @@ $_ckBase = _computeCheckerBase();
             barcodeCaptureState.preferredFacingMode = getPreferredBarcodeFacingMode();
             if (!barcodeCheckoutEnabled) {
                 if (tools) tools.style.display = 'none';
-                const btn = document.getElementById('barcodeToggleBtn');
-                if (btn) btn.style.display = 'none';
                 return;
             }
             applyBarcodeCameraAvailability();
@@ -1020,7 +1007,7 @@ $_ckBase = _computeCheckerBase();
                 input.setAttribute('autocorrect', 'off');
                 input.setAttribute('spellcheck', 'false');
             }
-            initBarcodeToggle();
+            applyBarcodeVisible(getBarcodeVisible());
         }
 
         async function switchBarcodeCameraFacing() {
@@ -1658,6 +1645,8 @@ $_ckBase = _computeCheckerBase();
             if (twoStepInput) twoStepInput.checked = Number(settings.kds_two_step_checkout || 0) === 1;
             const outOfStockInput = document.getElementById('kdsOutOfStockEnabled');
             if (outOfStockInput) outOfStockInput.checked = settings.out_of_stock_enabled !== 0;
+            const barcodeScanVisibleInput = document.getElementById('barcodeScanVisible');
+            if (barcodeScanVisibleInput) barcodeScanVisibleInput.checked = getBarcodeVisible();
             const cameraEnabledInput = document.getElementById('barcodeCameraEnabled');
             if (cameraEnabledInput) {
                 cameraEnabledInput.checked = Number(settings.barcode_camera_enabled || 0) === 1;
@@ -1687,6 +1676,7 @@ $_ckBase = _computeCheckerBase();
                 threshold_yellow: Number(document.getElementById('thresholdYellow').value || 0),
                 threshold_red: Number(document.getElementById('thresholdRed').value || 0),
                 sound_enabled: document.getElementById('soundEnabled').checked ? 1 : 0,
+                barcode_scan_visible: (document.getElementById('barcodeScanVisible') || {}).checked ? 1 : 0,
                 barcode_camera_enabled: document.getElementById('barcodeCameraEnabled').checked ? 1 : 0,
                 kds_two_step_checkout: document.getElementById('kdsTwoStepCheckout').checked ? 1 : 0,
                 out_of_stock_enabled: (document.getElementById('kdsOutOfStockEnabled') || {}).checked ? 1 : 0,
@@ -1751,6 +1741,8 @@ $_ckBase = _computeCheckerBase();
             localStorage.setItem('checker_threshold_yellow', String(payload.threshold_yellow || thresholdYellowDefault));
             localStorage.setItem('checker_threshold_red', String(payload.threshold_red || thresholdRedDefault));
             localStorage.setItem('checker_sound_enabled', payload.sound_enabled ? '1' : '0');
+            localStorage.setItem(_barcodeVisibleKey, payload.barcode_scan_visible ? '1' : '0');
+            applyBarcodeVisible(!!payload.barcode_scan_visible);
             saveBarcodeCameraEnabled(!!payload.barcode_camera_enabled);
             timerThresholds.yellow = Number(payload.threshold_yellow || thresholdYellowDefault || 10);
             timerThresholds.red = Number(payload.threshold_red || thresholdRedDefault || 20);
