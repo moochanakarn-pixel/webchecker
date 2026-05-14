@@ -2773,9 +2773,7 @@ $_ckBase = _computeCheckerBase();
                 clearTimeout(_fsHideTimer);
                 document.body.classList.remove('fs-ui-hidden');
             } else {
-                _fsHideTimer = setTimeout(function() {
-                    document.body.classList.add('fs-ui-hidden');
-                }, 3000);
+                document.body.classList.add('fs-ui-hidden');
             }
         }
         btn.addEventListener("click", function(){
