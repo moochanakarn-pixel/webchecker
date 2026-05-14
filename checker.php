@@ -576,10 +576,7 @@ $_ckBase = _computeCheckerBase();
                             <label for="settingsDbName">Database Name</label>
                             <input type="text" id="settingsDbName" placeholder="เช่น ini76">
                         </div>
-                        <div class="setting-field">
-                            <label for="settingsDbPort">Port</label>
-                            <input type="number" id="settingsDbPort" min="1" placeholder="3307">
-                        </div>
+                        <input type="hidden" id="settingsDbPort" value="3307">
                     </div>
                     <div class="settings-inline">
                         <button type="button" class="btn btn-neutral" id="testDbConnectionBtn">ทดสอบการเชื่อมต่อ</button>
@@ -1781,7 +1778,7 @@ $_ckBase = _computeCheckerBase();
 
         function applySystemSettingsToModal(settings, staffName, connectionMessage) {
             document.getElementById('settingsDbHost').value = String(settings.db_host || '');
-            document.getElementById('settingsDbPort').value = Number(settings.db_port || 3307);
+            // db_port locked to 3307 — no UI field
             document.getElementById('settingsDbName').value = String(settings.db_name || '');
             document.getElementById('settingsComputerId').value = Number(settings.current_computer_id || 0) || '';
             document.getElementById('settingsComputerName').value = String(settings.current_computer_name || '');
