@@ -1101,12 +1101,6 @@ $_ckBase = _computeCheckerBase();
                 '--secondary-soft':'#fff1e4',
                 '--success-soft':'#e6f8ee','--danger-soft':'#ffe8e4'
             },
-            dark: {
-                '--bg':'#111827','--bg-2':'#1a2332','--surface':'#1e2d3d','--surface-soft':'#243447',
-                '--text':'#e2eaf6','--muted':'#7a9ab5','--line':'#2a3f55',
-                '--secondary-soft':'#2a2010',
-                '--success-soft':'#1a3d1a','--danger-soft':'#3d1a1a'
-            },
             contrast: {
                 '--bg':'#000000','--bg-2':'#0a0a0a','--surface':'#1a1a1a','--surface-soft':'#222222',
                 '--text':'#ffffff','--muted':'#bbbbbb','--line':'#444444',
