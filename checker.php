@@ -90,6 +90,7 @@ $_ckBase = _computeCheckerBase();
             --shadow:0 12px 28px rgba(15, 23, 42, .10);
             --shadow-soft:0 8px 18px rgba(22, 131, 255, .08);
             --radius:22px;
+            --card-min-w:220px;
         }
         *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
         html,body{height:100%}
@@ -176,7 +177,7 @@ $_ckBase = _computeCheckerBase();
         }
         .stat{
             display:flex;align-items:center;gap:8px;
-            background:rgba(255,255,255,.88);border:1px solid rgba(255,255,255,.72);border-radius:14px;
+            background:var(--surface);border:1px solid var(--line);border-radius:14px;
             padding:7px 14px;box-shadow:var(--shadow)
         }
         .stat-label{font-size:12px;color:var(--muted);white-space:nowrap}
@@ -191,7 +192,7 @@ $_ckBase = _computeCheckerBase();
         .panel-head{
             display:flex;justify-content:space-between;align-items:center;gap:10px;
             padding:10px 14px;border-bottom:1px solid var(--line);
-            background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(245,250,255,.9))
+            background:var(--surface)
         }
         .panel-title{margin:0;font-size:17px;font-weight:bold}
         .panel-badge{
@@ -202,11 +203,11 @@ $_ckBase = _computeCheckerBase();
         /* ── Cards grid: target 8 cards visible ── */
         .cards{
             display:grid;
-            grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));
+            grid-template-columns:repeat(auto-fill, minmax(var(--card-min-w,220px), 1fr));
             gap:8px;padding:10px
         }
         .card{
-            background:linear-gradient(180deg,#fff,#fbfdff);border:1px solid var(--line);
+            background:linear-gradient(180deg,var(--surface),var(--surface-soft));border:1px solid var(--line);
             border-radius:16px;padding:10px;box-shadow:0 4px 12px rgba(17,56,92,.05);
             display:flex;flex-direction:column
         }
@@ -243,7 +244,7 @@ $_ckBase = _computeCheckerBase();
         .qty-badge.checkout-dark{background:linear-gradient(135deg,var(--secondary),#ffad59);border-color:#ffd8b0;color:#fff}
         .product-block{margin:0 0 8px}
         .product-name{margin:0;font-size:17px;line-height:1.2;word-break:break-word;font-weight:bold}
-        .product-total-hint{margin-top:6px;display:block;padding:0;background:transparent;border:none;border-radius:0;font-size:12px;font-weight:bold;color:#1758a5}
+        .product-total-hint{margin-top:6px;display:block;padding:0;background:transparent;border:none;border-radius:0;font-size:12px;font-weight:bold;color:var(--primary)}
         .parent-name-label{
             display:inline-block;margin-bottom:3px;font-size:11px;font-weight:bold;color:#fff;
             background:linear-gradient(135deg,var(--primary),var(--primary-dark));
@@ -256,13 +257,13 @@ $_ckBase = _computeCheckerBase();
         .queue-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
         .tag{
             display:inline-flex;align-items:center;min-height:26px;padding:4px 9px;border-radius:999px;
-            font-size:11px;font-weight:bold;background:#eef6ff;color:#1758a5;border:1px solid #d5e7ff
+            font-size:11px;font-weight:bold;background:var(--surface-soft);color:var(--primary);border:1px solid var(--line)
         }
         .tag.wait{background:var(--secondary-soft);color:#9f5200;border-color:#ffd2a4}
         .tag.good{background:var(--success-soft);color:#11783c;border-color:#bfeacc}
         .tag.urgent{background:#ffe8e4;color:#b33023;border-color:#ffb3ab}
         .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:8px}
-        .field{padding:7px 10px;border-radius:12px;background:var(--surface-soft);border:1px solid #e7f0fa}
+        .field{padding:7px 10px;border-radius:12px;background:var(--surface-soft);border:1px solid var(--line)}
         .field-label{font-size:11px;color:var(--muted);margin-bottom:2px}
         .field-value{font-size:13px;font-weight:bold;word-break:break-word}
         .card-actions{display:flex;gap:8px}
@@ -287,7 +288,7 @@ $_ckBase = _computeCheckerBase();
         }
         .drawer-backdrop.open{opacity:1;pointer-events:auto}
         .drawer{
-            position:fixed;top:0;right:0;width:min(460px,100vw);height:100vh;background:#fff;z-index:71;
+            position:fixed;top:0;right:0;width:min(460px,100vw);height:100vh;background:var(--surface);z-index:71;
             box-shadow:-20px 0 40px rgba(15,23,42,.18);transform:translateX(100%);transition:transform .22s ease;
             display:flex;flex-direction:column
         }
@@ -295,13 +296,13 @@ $_ckBase = _computeCheckerBase();
         .drawer-head{
             display:flex;justify-content:space-between;gap:10px;align-items:flex-start;
             padding:16px 16px 12px;border-bottom:1px solid var(--line);
-            background:linear-gradient(180deg,#fff,#f7fbff)
+            background:var(--surface)
         }
         .drawer-title{margin:0;font-size:20px;line-height:1.12}
         .drawer-sub{margin-top:4px;font-size:12px;color:var(--muted)}
         .drawer-close{min-width:44px;padding:0 12px}
         .drawer-list{padding:10px 12px 20px;display:flex;flex-direction:column;gap:8px;overflow:auto;flex:1}
-        .finished-item{border:1px solid var(--line);border-radius:16px;padding:11px;background:#fff}
+        .finished-item{border:1px solid var(--line);border-radius:16px;padding:11px;background:var(--surface)}
         .finished-top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;margin-bottom:7px}
         .finished-name{font-size:16px;font-weight:bold;line-height:1.25}
         .finished-qty{font-size:20px;font-weight:bold;color:var(--success)}
@@ -329,7 +330,7 @@ $_ckBase = _computeCheckerBase();
         .modal-backdrop.open{opacity:1;pointer-events:auto}
         .modal{
             position:fixed;top:50%;left:50%;transform:translate(-50%,-54%);
-            width:min(480px,95vw);background:#fff;border-radius:24px;
+            width:min(480px,95vw);background:var(--surface);border-radius:24px;
             box-shadow:0 24px 56px rgba(15,23,42,.22);z-index:81;
             transition:transform .2s ease,opacity .2s ease;opacity:0;pointer-events:none;
             max-height:92vh;display:flex;flex-direction:column
@@ -351,43 +352,53 @@ $_ckBase = _computeCheckerBase();
         .modal-input{width:72px;height:36px;border:2px solid var(--line);border-radius:10px;padding:0 10px;font-size:15px;font-weight:bold;text-align:center;color:var(--text)}
         .modal-unit{font-size:13px;color:var(--muted);white-space:nowrap}
         .modal-foot{padding:12px 20px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0}
-        .setting-check{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#f8fbff}
+        .setting-check{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-soft)}
         .setting-check input{width:18px;height:18px;flex:0 0 auto;margin-top:2px;cursor:pointer}
         .setting-check-title{font-size:14px;font-weight:600;color:var(--text)}
         .setting-check-sub{margin-top:3px;font-size:12px;color:var(--muted);line-height:1.45}
         .filter-section{display:flex;flex-direction:column;gap:8px}
-        .filter-section-title{font-size:13px;font-weight:700;color:#334155;margin-bottom:2px}
+        .filter-section-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px}
         .filter-section-sub{font-size:12px;color:var(--muted);margin-bottom:6px}
         .filter-chips{display:flex;flex-wrap:wrap;gap:6px}
-        .filter-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;border:1.5px solid var(--line);background:#f8fbff;font-size:13px;font-weight:600;color:#334155;cursor:pointer;user-select:none;transition:border-color .15s,background .15s}
+        .filter-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface-soft);font-size:13px;font-weight:600;color:var(--text);cursor:pointer;user-select:none;transition:border-color .15s,background .15s}
         .filter-chip input[type=checkbox]{display:none}
-        .filter-chip.active{border-color:#1683ff;background:#e6f0ff;color:#1250b0}
+        .filter-chip.active{border-color:var(--primary);background:var(--primary);color:#fff}
         .setting-stack{display:flex;flex-direction:column;gap:14px}
         .setting-grid{display:grid;grid-template-columns:1fr 160px;gap:12px}
         .setting-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
         .setting-field label{display:block;font-size:13px;font-weight:700;color:#334155;margin-bottom:6px}
-        .setting-field input{width:100%;height:42px;border:2px solid var(--line);border-radius:12px;padding:0 12px;font-size:14px;font-weight:700;color:var(--text);background:#fff}
+        .setting-field input{width:100%;height:42px;border:2px solid var(--line);border-radius:12px;padding:0 12px;font-size:14px;font-weight:700;color:var(--text);background:var(--surface)}
         .setting-field input:focus{outline:none;border-color:#9ecbff;box-shadow:0 0 0 4px rgba(22,131,255,.10)}
         .setting-help{font-size:12px;color:var(--muted);line-height:1.45;margin-top:6px}
-        .settings-status{padding:10px 12px;border-radius:12px;background:#f8fbff;border:1px solid var(--line);font-size:13px;color:#334155;line-height:1.5;display:none}
+        .settings-status{padding:10px 12px;border-radius:12px;background:var(--surface-soft);border:1px solid var(--line);font-size:13px;color:var(--text);line-height:1.5;display:none}
         .settings-status.show{display:block}
         .settings-status.success{background:#e6f8ee;border-color:#bfeacc;color:#0f7b3b}
         .settings-status.error{background:#ffe8e4;border-color:#f6beb7;color:#b33023}
         .settings-inline{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-        .settings-staff-name{font-size:13px;font-weight:700;color:#0f69cf}
+        .settings-staff-name{font-size:13px;font-weight:700;color:var(--primary)}
         .settings-headline{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-        .settings-pill{display:inline-flex;align-items:center;min-height:30px;padding:0 10px;border-radius:999px;background:#eef4fb;border:1px solid var(--line);font-size:12px;font-weight:700;color:#334155}
+        .settings-pill{display:inline-flex;align-items:center;min-height:30px;padding:0 10px;border-radius:999px;background:var(--surface-soft);border:1px solid var(--line);font-size:12px;font-weight:700;color:var(--text)}
+        .modal-tabs{display:flex;gap:4px;padding:0 20px 0;border-bottom:1px solid var(--line);margin-top:4px}
+        .modal-tab{background:none;border:none;border-bottom:2px solid transparent;padding:8px 14px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;margin-bottom:-1px;border-radius:0;transition:color .15s}
+        .modal-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+        .tab-panel{display:none}.tab-panel.active{display:block}
+        .appearance-btn-group{display:flex;flex-wrap:wrap;gap:8px}
+        .appearance-btn{padding:7px 16px;border-radius:10px;border:2px solid var(--line);background:var(--surface);font-size:13px;font-weight:700;color:var(--text);cursor:pointer;transition:border-color .15s,background .15s}
+        .appearance-btn.active{border-color:var(--primary);background:var(--primary);color:#fff}
+        .color-palette{display:flex;gap:10px;flex-wrap:wrap}
+        .color-swatch{width:30px;height:30px;border-radius:50%;border:3px solid transparent;cursor:pointer;transition:transform .15s,border-color .15s}
+        .color-swatch.active{border-color:var(--text);transform:scale(1.15)}
         .camera-wrap{display:flex;flex-direction:column;gap:12px}
         .camera-frame{position:relative;border-radius:18px;overflow:hidden;background:#0b1220;min-height:320px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
         .camera-video{display:block;width:100%;height:min(62vh,520px);object-fit:cover;background:#0b1220}
         .camera-overlay{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.18))}
         .camera-guide{width:min(82%,420px);height:min(28vw,140px);max-height:140px;border:3px solid rgba(255,255,255,.92);border-radius:18px;box-shadow:0 0 0 9999px rgba(0,0,0,.18)}
-        .camera-status{padding:10px 12px;border-radius:12px;background:#f8fbff;border:1px solid var(--line);font-size:13px;color:var(--muted);line-height:1.5}
+        .camera-status{padding:10px 12px;border-radius:12px;background:var(--surface-soft);border:1px solid var(--line);font-size:13px;color:var(--muted);line-height:1.5}
         .camera-modal .modal-body{padding:14px 16px}
         /* sound upload zone */
         .sound-upload-zone{
             border:2px dashed var(--line);border-radius:14px;padding:14px 16px;
-            display:flex;flex-direction:column;gap:8px;background:#f8fbff
+            display:flex;flex-direction:column;gap:8px;background:var(--surface-soft)
         }
         .sound-upload-row{display:flex;align-items:center;gap:10px}
         .sound-name{flex:1;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -436,7 +447,7 @@ $_ckBase = _computeCheckerBase();
         .soldout-search{width:100%;height:42px;border:2px solid var(--line);border-radius:12px;padding:0 14px;font-size:15px;font-weight:600;color:var(--text);outline:none}
         .soldout-note{margin-top:8px;font-size:12px;color:var(--muted)}
         .soldout-list{display:flex;flex-direction:column;gap:10px;max-height:52vh;overflow:auto}
-        .soldout-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:#fff}
+        .soldout-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
         .soldout-item.closed{background:#f9fafb;border-color:#d1d5db}
         .soldout-meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px}
         .soldout-chip{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;background:#eef2ff;color:#1d4ed8}
@@ -555,10 +566,14 @@ $_ckBase = _computeCheckerBase();
     <div class="modal-backdrop" id="timerSettingsBackdrop"></div>
     <div class="modal" id="timerSettingsModal" role="dialog" aria-modal="true" aria-labelledby="timerSettingsTitle">
         <div class="modal-head">
-            <h2 class="modal-title" id="timerSettingsTitle">⚙️ ตั้งค่าระบบ</h2>
-            <div class="modal-sub">ตั้งค่าฐานข้อมูล เครื่องที่ใช้งาน การแจ้งเตือน และฟีเจอร์หลักทั้งหมดจากปุ่มเดียว</div>
+            <h2 class="modal-title" id="timerSettingsTitle">⚙️ ตั้งค่า</h2>
+        </div>
+        <div class="modal-tabs">
+            <button class="modal-tab active" id="tabBtnSystem">⚙️ ระบบ</button>
+            <button class="modal-tab" id="tabBtnAppearance">🎨 หน้าตา</button>
         </div>
         <div class="modal-body">
+            <div id="tabPanelSystem" class="tab-panel active">
             <div class="settings-status" id="systemSettingsStatusBox"></div>
 
             <div class="modal-section">
@@ -729,7 +744,51 @@ $_ckBase = _computeCheckerBase();
                     <div class="filter-chips" id="zoneFilterChips"><span style="font-size:13px;color:var(--muted)">กำลังโหลด...</span></div>
                 </div>
             </div>
-        </div>
+            </div><!-- /tabPanelSystem -->
+
+            <div id="tabPanelAppearance" class="tab-panel">
+                <div class="modal-section">
+                    <div class="modal-section-title">Theme</div>
+                    <div class="appearance-btn-group">
+                        <button class="appearance-btn" data-theme="default">☀️ Default</button>
+                        <button class="appearance-btn" data-theme="dark">🌙 Dark</button>
+                        <button class="appearance-btn" data-theme="contrast">⚡ High Contrast</button>
+                    </div>
+                </div>
+                <div class="modal-section">
+                    <div class="modal-section-title">ขนาด Card</div>
+                    <div class="appearance-btn-group">
+                        <button class="appearance-btn" data-card="s">S</button>
+                        <button class="appearance-btn" data-card="m">M</button>
+                        <button class="appearance-btn" data-card="l">L</button>
+                        <button class="appearance-btn" data-card="xl">XL</button>
+                    </div>
+                </div>
+                <div class="modal-section">
+                    <div class="modal-section-title">ขนาดตัวอักษร</div>
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:11px;color:var(--muted)">เล็ก</span>
+                        <input type="range" id="fontScaleSlider" min="85" max="130" step="5" value="100" style="flex:1;accent-color:var(--primary)">
+                        <span style="font-size:11px;color:var(--muted)">ใหญ่</span>
+                        <span id="fontScaleLabel" style="font-size:12px;font-weight:bold;min-width:36px;text-align:right;color:var(--text)">100%</span>
+                    </div>
+                </div>
+                <div class="modal-section">
+                    <div class="modal-section-title">สีหลัก</div>
+                    <div class="color-palette">
+                        <button class="color-swatch" data-accent="blue"   style="background:#1683ff" title="Blue"></button>
+                        <button class="color-swatch" data-accent="green"  style="background:#12a150" title="Green"></button>
+                        <button class="color-swatch" data-accent="red"    style="background:#e44c3a" title="Red"></button>
+                        <button class="color-swatch" data-accent="orange" style="background:#ff8a1f" title="Orange"></button>
+                        <button class="color-swatch" data-accent="purple" style="background:#7c3aed" title="Purple"></button>
+                        <button class="color-swatch" data-accent="slate"  style="background:#475569" title="Slate"></button>
+                    </div>
+                </div>
+                <div style="margin-top:20px;text-align:right">
+                    <button type="button" class="btn btn-neutral" id="resetAppearanceBtn">↺ คืนค่า Default</button>
+                </div>
+            </div><!-- /tabPanelAppearance -->
+        </div><!-- /modal-body -->
         <div class="modal-foot">
             <button type="button" class="btn btn-neutral" id="timerSettingsCancelBtn">ยกเลิก</button>
             <button type="button" class="btn btn-success" id="timerSettingsSaveBtn">บันทึกค่าระบบ</button>
@@ -1002,7 +1061,7 @@ $_ckBase = _computeCheckerBase();
 
         function queueGlobalBarcodeDigit(digit) {
             const now = Date.now();
-            const isFreshScan = barcodeCaptureState.awaitingFreshScan || (now - barcodeCaptureState.lastAt > 280) || !barcodeCaptureState.buffer;
+            const isFreshScan = barcodeCaptureState.awaitingFreshScan || (now - barcodeCaptureState.lastAt > 500) || !barcodeCaptureState.buffer;
             if (isFreshScan) {
                 const input = document.getElementById('barcodeInput');
                 if (input) input.value = '';
@@ -1033,6 +1092,138 @@ $_ckBase = _computeCheckerBase();
             if (tools) tools.style.display = visible ? '' : 'none';
             if (visible) focusBarcodeInput();
         }
+
+        // ── Appearance / Theme ──────────────────────────────────────────
+        const _appearanceThemes = {
+            default: {
+                '--bg':'#edf5ff','--bg-2':'#fff7ed','--surface':'#ffffff','--surface-soft':'#f8fbff',
+                '--text':'#122033','--muted':'#6b7a90','--line':'#dbe8f7',
+                '--secondary-soft':'#fff1e4',
+                '--success-soft':'#e6f8ee','--danger-soft':'#ffe8e4'
+            },
+            contrast: {
+                '--bg':'#000000','--bg-2':'#0a0a0a','--surface':'#1a1a1a','--surface-soft':'#222222',
+                '--text':'#ffffff','--muted':'#bbbbbb','--line':'#444444',
+                '--secondary-soft':'#1a1200',
+                '--success-soft':'#003300','--danger-soft':'#330000'
+            }
+        };
+        const _appearanceAccents = {
+            blue:   {'--primary':'#1683ff','--primary-dark':'#0f69cf'},
+            green:  {'--primary':'#12a150','--primary-dark':'#0d7d3e'},
+            red:    {'--primary':'#e44c3a','--primary-dark':'#c23526'},
+            orange: {'--primary':'#ff8a1f','--primary-dark':'#d96e0a'},
+            purple: {'--primary':'#7c3aed','--primary-dark':'#6025c0'},
+            slate:  {'--primary':'#475569','--primary-dark':'#334155'}
+        };
+        const _cardSizes = {s:'160px', m:'220px', l:'280px', xl:'360px'};
+        const _appearanceKey = 'kds_appearance';
+
+        function loadAppearanceSettings() {
+            try { return JSON.parse(localStorage.getItem(_appearanceKey) || '{}'); } catch(e) { return {}; }
+        }
+        function saveAppearanceSettings(patch) {
+            const cur = loadAppearanceSettings();
+            localStorage.setItem(_appearanceKey, JSON.stringify(Object.assign(cur, patch)));
+        }
+        function applyAppearanceSettings() {
+            const s = loadAppearanceSettings();
+            const theme = _appearanceThemes[s.theme] || _appearanceThemes.default;
+            const accent = _appearanceAccents[s.accent] || _appearanceAccents.blue;
+            const root = document.documentElement.style;
+            Object.entries(theme).forEach(function(e){ root.setProperty(e[0], e[1]); });
+            Object.entries(accent).forEach(function(e){ root.setProperty(e[0], e[1]); });
+            root.setProperty('--card-min-w', _cardSizes[s.card] || '220px');
+            const pageEl = document.querySelector('.page');
+            if (pageEl) pageEl.style.zoom = (parseInt(s.font || '100', 10) / 100);
+        }
+        function resetAppearanceSettings() {
+            localStorage.removeItem(_appearanceKey);
+            const pageEl = document.querySelector('.page');
+            if (pageEl) pageEl.style.zoom = '';
+            applyAppearanceSettings();
+            syncAppearanceUI();
+        }
+        function syncAppearanceUI() {
+            const s = loadAppearanceSettings();
+            const theme = s.theme || 'default';
+            const accent = s.accent || 'blue';
+            const card = s.card || 'm';
+            const font = parseInt(s.font || '100', 10);
+            document.querySelectorAll('[data-theme]').forEach(function(b){
+                b.classList.toggle('active', b.dataset.theme === theme);
+            });
+            document.querySelectorAll('[data-card]').forEach(function(b){
+                b.classList.toggle('active', b.dataset.card === card);
+            });
+            document.querySelectorAll('[data-accent]').forEach(function(b){
+                b.classList.toggle('active', b.dataset.accent === accent);
+            });
+            const slider = document.getElementById('fontScaleSlider');
+            const label  = document.getElementById('fontScaleLabel');
+            if (slider) slider.value = font;
+            if (label)  label.textContent = font + '%';
+        }
+        function initAppearancePanel() {
+            document.querySelectorAll('[data-theme]').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    saveAppearanceSettings({theme: btn.dataset.theme});
+                    applyAppearanceSettings();
+                    syncAppearanceUI();
+                });
+            });
+            document.querySelectorAll('[data-card]').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    saveAppearanceSettings({card: btn.dataset.card});
+                    applyAppearanceSettings();
+                    syncAppearanceUI();
+                });
+            });
+            document.querySelectorAll('[data-accent]').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    saveAppearanceSettings({accent: btn.dataset.accent});
+                    applyAppearanceSettings();
+                    syncAppearanceUI();
+                });
+            });
+            const slider = document.getElementById('fontScaleSlider');
+            if (slider) {
+                slider.addEventListener('input', function() {
+                    const v = slider.value;
+                    const label = document.getElementById('fontScaleLabel');
+                    if (label) label.textContent = v + '%';
+                    saveAppearanceSettings({font: v});
+                    applyAppearanceSettings();
+                });
+            }
+            const resetBtn = document.getElementById('resetAppearanceBtn');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', function() {
+                    if (!confirm('คืนค่าหน้าตาทั้งหมดกลับเป็น Default?')) return;
+                    resetAppearanceSettings();
+                });
+            }
+        }
+        function initSettingsTabs() {
+            const btnSystem     = document.getElementById('tabBtnSystem');
+            const btnAppearance = document.getElementById('tabBtnAppearance');
+            const panelSystem   = document.getElementById('tabPanelSystem');
+            const panelAppearance = document.getElementById('tabPanelAppearance');
+            const saveBtn = document.getElementById('timerSettingsSaveBtn');
+            function switchTab(tab) {
+                const isSystem = tab === 'system';
+                btnSystem.classList.toggle('active', isSystem);
+                btnAppearance.classList.toggle('active', !isSystem);
+                panelSystem.classList.toggle('active', isSystem);
+                panelAppearance.classList.toggle('active', !isSystem);
+                if (saveBtn) saveBtn.style.display = isSystem ? '' : 'none';
+                if (!isSystem) syncAppearanceUI();
+            }
+            btnSystem.addEventListener('click', function() { switchTab('system'); });
+            btnAppearance.addEventListener('click', function() { switchTab('appearance'); });
+            window._switchSettingsTab = switchTab;
+        }
+        // ── End Appearance ──────────────────────────────────────────────
 
         function initBarcodeSettings() {
             const input = document.getElementById('barcodeInput');
@@ -1507,6 +1698,7 @@ $_ckBase = _computeCheckerBase();
         async function openTimerSettings() {
             document.getElementById('systemSettingsStatusBox').className = 'settings-status';
             document.getElementById('systemSettingsStatusBox').textContent = '';
+            if (window._switchSettingsTab) window._switchSettingsTab('system');
             state.timerSettingsOpen = true;
             state.saleModeChipsReady = false;
             state.zoneChipsReady = false;
@@ -2815,6 +3007,7 @@ $_ckBase = _computeCheckerBase();
             barcodeInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' && getBarcodeAutoSubmitEnabled()) {
                     e.preventDefault();
+                    e.stopPropagation();
                     checkoutBarcode();
                 }
             });
@@ -2945,7 +3138,7 @@ $_ckBase = _computeCheckerBase();
             const targetIsBarcode = target && target.id === 'barcodeInput';
             if (isEditableElement(target) && !targetIsBarcode) return;
 
-            if (/^[0-9]$/.test(event.key)) {
+            if (/^[0-9A-Za-z\-]$/.test(event.key)) {
                 if (targetIsBarcode) {
                     return;
                 }
@@ -2979,6 +3172,9 @@ $_ckBase = _computeCheckerBase();
         initSoundSettings();
         initSoundUI();
         initBarcodeSettings();
+        applyAppearanceSettings();
+        initAppearancePanel();
+        initSettingsTabs();
         kdsLogActivity('APP_START', 'CID:' + _kdsCid, 0);
 
         function showDbConnectingState() {
