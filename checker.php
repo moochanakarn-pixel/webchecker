@@ -385,9 +385,7 @@ $_ckBase = _computeCheckerBase();
         .appearance-btn-group{display:flex;flex-wrap:wrap;gap:8px}
         .appearance-btn{padding:7px 16px;border-radius:10px;border:2px solid var(--line);background:var(--surface);font-size:13px;font-weight:700;color:var(--text);cursor:pointer;transition:border-color .15s,background .15s}
         .appearance-btn.active{border-color:var(--primary);background:var(--primary);color:#fff}
-        .color-palette{display:flex;gap:10px;flex-wrap:wrap}
-        .color-swatch{width:30px;height:30px;border-radius:50%;border:3px solid transparent;cursor:pointer;transition:transform .15s,border-color .15s}
-        .color-swatch.active{border-color:var(--text);transform:scale(1.15)}
+
         .camera-wrap{display:flex;flex-direction:column;gap:12px}
         .camera-frame{position:relative;border-radius:18px;overflow:hidden;background:#0b1220;min-height:320px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
         .camera-video{display:block;width:100%;height:min(62vh,520px);object-fit:cover;background:#0b1220}
@@ -847,6 +845,7 @@ $_ckBase = _computeCheckerBase();
         var staffIsLoggedIn = false;   // var เพราะต้องแชร์ข้าม <script> block กับ staff login IIFE
         let _activeRowsLoading   = false;
         let _finishedRowsLoading = false;
+        let _pollingErrorCount   = 0;
         var staffLoginHidden = false;  // true = ซ่อน topbar login, ใช้ finish_staff_id จาก settings แทน
 
         function applyStaffLoginMode(hidden) {
@@ -1727,6 +1726,8 @@ $_ckBase = _computeCheckerBase();
                 showSystemSettingsStatus('กรุณาตั้งค่า Staff Code ก่อนเปิดใช้งาน "ซ่อนช่อง Login พนักงาน"', 'error');
                 return;
             }
+            const saveBtn = document.getElementById('timerSettingsSaveBtn');
+            if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'กำลังบันทึก...'; }
             try {
                 const response = await kdsApiFetch(_kdsBase + '/api_checker.php', {
                     method: 'POST',
@@ -1746,6 +1747,7 @@ $_ckBase = _computeCheckerBase();
                 setTimeout(function() { window.location.reload(); }, 700);
             } catch (error) {
                 showSystemSettingsStatus(error.message || 'บันทึกค่าระบบไม่สำเร็จ', 'error');
+                if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'บันทึกค่าระบบ'; }
             }
         }
 
@@ -2130,13 +2132,14 @@ $_ckBase = _computeCheckerBase();
                 checkForCancelledOrders(state.active_rows);
                 updateView();
                 setStatusText('พร้อมใช้งาน');
+                if (_pollingErrorCount > 0) { _pollingErrorCount = 0; hidePollingOfflineBanner(); }
                 return true;
             } catch (error) {
                 if (error && error.name === 'AbortError') { setStatusText('หมดเวลา — รอรอบถัดไป'); return false; }
                 setStatusText('เกิดข้อผิดพลาด');
-                if (!silent) {
-                    showNotice(error.message || 'โหลดคิวไม่สำเร็จ', 'error');
-                }
+                _pollingErrorCount++;
+                if (_pollingErrorCount >= 3) { showPollingOfflineBanner(); }
+                else if (!silent) { showNotice(error.message || 'โหลดคิวไม่สำเร็จ', 'error'); }
                 return false;
             } finally {
                 _activeRowsLoading = false;
@@ -3108,6 +3111,20 @@ $_ckBase = _computeCheckerBase();
         initAppearancePanel();
         initSettingsTabs();
         kdsLogActivity('APP_START', 'CID:' + _kdsCid, 0);
+
+        function showPollingOfflineBanner() {
+            var existing = document.getElementById('kdsOfflineBanner');
+            if (existing) return;
+            var banner = document.createElement('div');
+            banner.id = 'kdsOfflineBanner';
+            banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:200;background:#e44c3a;color:#fff;text-align:center;padding:10px 16px;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:12px;box-shadow:0 4px 12px rgba(0,0,0,.2)';
+            banner.innerHTML = '⚠️ ระบบ OFFLINE — ไม่สามารถเชื่อมต่อฐานข้อมูลได้ <button onclick="hidePollingOfflineBanner();kdsStartupCheck()" style="padding:4px 14px;background:#fff;color:#e44c3a;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔄 ลองใหม่</button>';
+            document.body.prepend(banner);
+        }
+        function hidePollingOfflineBanner() {
+            var banner = document.getElementById('kdsOfflineBanner');
+            if (banner) banner.remove();
+        }
 
         function showDbConnectingState() {
             var wrap = document.getElementById('activeCards');
