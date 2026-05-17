@@ -90,6 +90,7 @@ $_ckBase = _computeCheckerBase();
             --shadow:0 12px 28px rgba(15, 23, 42, .10);
             --shadow-soft:0 8px 18px rgba(22, 131, 255, .08);
             --radius:22px;
+            --card-min-w:220px;
         }
         *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
         html,body{height:100%}
@@ -202,7 +203,7 @@ $_ckBase = _computeCheckerBase();
         /* ── Cards grid: target 8 cards visible ── */
         .cards{
             display:grid;
-            grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));
+            grid-template-columns:repeat(auto-fill, minmax(var(--card-min-w,220px), 1fr));
             gap:8px;padding:10px
         }
         .card{
@@ -377,6 +378,16 @@ $_ckBase = _computeCheckerBase();
         .settings-staff-name{font-size:13px;font-weight:700;color:#0f69cf}
         .settings-headline{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
         .settings-pill{display:inline-flex;align-items:center;min-height:30px;padding:0 10px;border-radius:999px;background:#eef4fb;border:1px solid var(--line);font-size:12px;font-weight:700;color:#334155}
+        .modal-tabs{display:flex;gap:4px;padding:0 20px 0;border-bottom:1px solid var(--line);margin-top:4px}
+        .modal-tab{background:none;border:none;border-bottom:2px solid transparent;padding:8px 14px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;margin-bottom:-1px;border-radius:0;transition:color .15s}
+        .modal-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+        .tab-panel{display:none}.tab-panel.active{display:block}
+        .appearance-btn-group{display:flex;flex-wrap:wrap;gap:8px}
+        .appearance-btn{padding:7px 16px;border-radius:10px;border:2px solid var(--line);background:var(--surface);font-size:13px;font-weight:700;color:var(--text);cursor:pointer;transition:border-color .15s,background .15s}
+        .appearance-btn.active{border-color:var(--primary);background:#e6f0ff;color:var(--primary)}
+        .color-palette{display:flex;gap:10px;flex-wrap:wrap}
+        .color-swatch{width:30px;height:30px;border-radius:50%;border:3px solid transparent;cursor:pointer;transition:transform .15s,border-color .15s}
+        .color-swatch.active{border-color:var(--text);transform:scale(1.15)}
         .camera-wrap{display:flex;flex-direction:column;gap:12px}
         .camera-frame{position:relative;border-radius:18px;overflow:hidden;background:#0b1220;min-height:320px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
         .camera-video{display:block;width:100%;height:min(62vh,520px);object-fit:cover;background:#0b1220}
@@ -555,10 +566,14 @@ $_ckBase = _computeCheckerBase();
     <div class="modal-backdrop" id="timerSettingsBackdrop"></div>
     <div class="modal" id="timerSettingsModal" role="dialog" aria-modal="true" aria-labelledby="timerSettingsTitle">
         <div class="modal-head">
-            <h2 class="modal-title" id="timerSettingsTitle">⚙️ ตั้งค่าระบบ</h2>
-            <div class="modal-sub">ตั้งค่าฐานข้อมูล เครื่องที่ใช้งาน การแจ้งเตือน และฟีเจอร์หลักทั้งหมดจากปุ่มเดียว</div>
+            <h2 class="modal-title" id="timerSettingsTitle">⚙️ ตั้งค่า</h2>
+        </div>
+        <div class="modal-tabs">
+            <button class="modal-tab active" id="tabBtnSystem">⚙️ ระบบ</button>
+            <button class="modal-tab" id="tabBtnAppearance">🎨 หน้าตา</button>
         </div>
         <div class="modal-body">
+            <div id="tabPanelSystem" class="tab-panel active">
             <div class="settings-status" id="systemSettingsStatusBox"></div>
 
             <div class="modal-section">
@@ -729,7 +744,51 @@ $_ckBase = _computeCheckerBase();
                     <div class="filter-chips" id="zoneFilterChips"><span style="font-size:13px;color:var(--muted)">กำลังโหลด...</span></div>
                 </div>
             </div>
-        </div>
+            </div><!-- /tabPanelSystem -->
+
+            <div id="tabPanelAppearance" class="tab-panel">
+                <div class="modal-section">
+                    <div class="modal-section-title">Theme</div>
+                    <div class="appearance-btn-group">
+                        <button class="appearance-btn" data-theme="default">☀️ Default</button>
+                        <button class="appearance-btn" data-theme="dark">🌙 Dark</button>
+                        <button class="appearance-btn" data-theme="contrast">⚡ High Contrast</button>
+                    </div>
+                </div>
+                <div class="modal-section">
+                    <div class="modal-section-title">ขนาด Card</div>
+                    <div class="appearance-btn-group">
+                        <button class="appearance-btn" data-card="s">S</button>
+                        <button class="appearance-btn" data-card="m">M</button>
+                        <button class="appearance-btn" data-card="l">L</button>
+                        <button class="appearance-btn" data-card="xl">XL</button>
+                    </div>
+                </div>
+                <div class="modal-section">
+                    <div class="modal-section-title">ขนาดตัวอักษร</div>
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:11px;color:var(--muted)">เล็ก</span>
+                        <input type="range" id="fontScaleSlider" min="85" max="130" step="5" value="100" style="flex:1;accent-color:var(--primary)">
+                        <span style="font-size:11px;color:var(--muted)">ใหญ่</span>
+                        <span id="fontScaleLabel" style="font-size:12px;font-weight:bold;min-width:36px;text-align:right;color:var(--text)">100%</span>
+                    </div>
+                </div>
+                <div class="modal-section">
+                    <div class="modal-section-title">สีหลัก</div>
+                    <div class="color-palette">
+                        <button class="color-swatch" data-accent="blue"   style="background:#1683ff" title="Blue"></button>
+                        <button class="color-swatch" data-accent="green"  style="background:#12a150" title="Green"></button>
+                        <button class="color-swatch" data-accent="red"    style="background:#e44c3a" title="Red"></button>
+                        <button class="color-swatch" data-accent="orange" style="background:#ff8a1f" title="Orange"></button>
+                        <button class="color-swatch" data-accent="purple" style="background:#7c3aed" title="Purple"></button>
+                        <button class="color-swatch" data-accent="slate"  style="background:#475569" title="Slate"></button>
+                    </div>
+                </div>
+                <div style="margin-top:20px;text-align:right">
+                    <button type="button" class="btn btn-neutral" id="resetAppearanceBtn">↺ คืนค่า Default</button>
+                </div>
+            </div><!-- /tabPanelAppearance -->
+        </div><!-- /modal-body -->
         <div class="modal-foot">
             <button type="button" class="btn btn-neutral" id="timerSettingsCancelBtn">ยกเลิก</button>
             <button type="button" class="btn btn-success" id="timerSettingsSaveBtn">บันทึกค่าระบบ</button>
@@ -1033,6 +1092,137 @@ $_ckBase = _computeCheckerBase();
             if (tools) tools.style.display = visible ? '' : 'none';
             if (visible) focusBarcodeInput();
         }
+
+        // ── Appearance / Theme ──────────────────────────────────────────
+        const _appearanceThemes = {
+            default: {
+                '--bg':'#edf5ff','--bg-2':'#fff7ed','--surface':'#ffffff','--surface-soft':'#f8fbff',
+                '--text':'#122033','--muted':'#6b7a90','--line':'#dbe8f7',
+                '--secondary-soft':'#fff1e4'
+            },
+            dark: {
+                '--bg':'#111827','--bg-2':'#1a2332','--surface':'#1e2d3d','--surface-soft':'#243447',
+                '--text':'#e2eaf6','--muted':'#7a9ab5','--line':'#2a3f55',
+                '--secondary-soft':'#2a2010'
+            },
+            contrast: {
+                '--bg':'#000000','--bg-2':'#0a0a0a','--surface':'#1a1a1a','--surface-soft':'#222222',
+                '--text':'#ffffff','--muted':'#bbbbbb','--line':'#444444',
+                '--secondary-soft':'#1a1200'
+            }
+        };
+        const _appearanceAccents = {
+            blue:   {'--primary':'#1683ff','--primary-dark':'#0f69cf'},
+            green:  {'--primary':'#12a150','--primary-dark':'#0d7d3e'},
+            red:    {'--primary':'#e44c3a','--primary-dark':'#c23526'},
+            orange: {'--primary':'#ff8a1f','--primary-dark':'#d96e0a'},
+            purple: {'--primary':'#7c3aed','--primary-dark':'#6025c0'},
+            slate:  {'--primary':'#475569','--primary-dark':'#334155'}
+        };
+        const _cardSizes = {s:'160px', m:'220px', l:'280px', xl:'360px'};
+        const _appearanceKey = 'kds_appearance';
+
+        function loadAppearanceSettings() {
+            try { return JSON.parse(localStorage.getItem(_appearanceKey) || '{}'); } catch(e) { return {}; }
+        }
+        function saveAppearanceSettings(patch) {
+            const cur = loadAppearanceSettings();
+            localStorage.setItem(_appearanceKey, JSON.stringify(Object.assign(cur, patch)));
+        }
+        function applyAppearanceSettings() {
+            const s = loadAppearanceSettings();
+            const theme = _appearanceThemes[s.theme] || _appearanceThemes.default;
+            const accent = _appearanceAccents[s.accent] || _appearanceAccents.blue;
+            const root = document.documentElement.style;
+            Object.entries(theme).forEach(function(e){ root.setProperty(e[0], e[1]); });
+            Object.entries(accent).forEach(function(e){ root.setProperty(e[0], e[1]); });
+            root.setProperty('--card-min-w', _cardSizes[s.card] || '220px');
+            document.documentElement.style.fontSize = ((parseInt(s.font || '100', 10)) / 100) + 'rem';
+        }
+        function resetAppearanceSettings() {
+            localStorage.removeItem(_appearanceKey);
+            applyAppearanceSettings();
+            syncAppearanceUI();
+        }
+        function syncAppearanceUI() {
+            const s = loadAppearanceSettings();
+            const theme = s.theme || 'default';
+            const accent = s.accent || 'blue';
+            const card = s.card || 'm';
+            const font = parseInt(s.font || '100', 10);
+            document.querySelectorAll('[data-theme]').forEach(function(b){
+                b.classList.toggle('active', b.dataset.theme === theme);
+            });
+            document.querySelectorAll('[data-card]').forEach(function(b){
+                b.classList.toggle('active', b.dataset.card === card);
+            });
+            document.querySelectorAll('[data-accent]').forEach(function(b){
+                b.classList.toggle('active', b.dataset.accent === accent);
+            });
+            const slider = document.getElementById('fontScaleSlider');
+            const label  = document.getElementById('fontScaleLabel');
+            if (slider) slider.value = font;
+            if (label)  label.textContent = font + '%';
+        }
+        function initAppearancePanel() {
+            document.querySelectorAll('[data-theme]').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    saveAppearanceSettings({theme: btn.dataset.theme});
+                    applyAppearanceSettings();
+                    syncAppearanceUI();
+                });
+            });
+            document.querySelectorAll('[data-card]').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    saveAppearanceSettings({card: btn.dataset.card});
+                    applyAppearanceSettings();
+                    syncAppearanceUI();
+                });
+            });
+            document.querySelectorAll('[data-accent]').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    saveAppearanceSettings({accent: btn.dataset.accent});
+                    applyAppearanceSettings();
+                    syncAppearanceUI();
+                });
+            });
+            const slider = document.getElementById('fontScaleSlider');
+            if (slider) {
+                slider.addEventListener('input', function() {
+                    const v = slider.value;
+                    const label = document.getElementById('fontScaleLabel');
+                    if (label) label.textContent = v + '%';
+                    saveAppearanceSettings({font: v});
+                    applyAppearanceSettings();
+                });
+            }
+            const resetBtn = document.getElementById('resetAppearanceBtn');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', function() {
+                    if (!confirm('คืนค่าหน้าตาทั้งหมดกลับเป็น Default?')) return;
+                    resetAppearanceSettings();
+                });
+            }
+        }
+        function initSettingsTabs() {
+            const btnSystem     = document.getElementById('tabBtnSystem');
+            const btnAppearance = document.getElementById('tabBtnAppearance');
+            const panelSystem   = document.getElementById('tabPanelSystem');
+            const panelAppearance = document.getElementById('tabPanelAppearance');
+            const saveBtn = document.getElementById('timerSettingsSaveBtn');
+            function switchTab(tab) {
+                const isSystem = tab === 'system';
+                btnSystem.classList.toggle('active', isSystem);
+                btnAppearance.classList.toggle('active', !isSystem);
+                panelSystem.classList.toggle('active', isSystem);
+                panelAppearance.classList.toggle('active', !isSystem);
+                if (saveBtn) saveBtn.style.display = isSystem ? '' : 'none';
+                if (!isSystem) syncAppearanceUI();
+            }
+            btnSystem.addEventListener('click', function() { switchTab('system'); });
+            btnAppearance.addEventListener('click', function() { switchTab('appearance'); });
+        }
+        // ── End Appearance ──────────────────────────────────────────────
 
         function initBarcodeSettings() {
             const input = document.getElementById('barcodeInput');
@@ -2980,6 +3170,9 @@ $_ckBase = _computeCheckerBase();
         initSoundSettings();
         initSoundUI();
         initBarcodeSettings();
+        applyAppearanceSettings();
+        initAppearancePanel();
+        initSettingsTabs();
         kdsLogActivity('APP_START', 'CID:' + _kdsCid, 0);
 
         function showDbConnectingState() {
