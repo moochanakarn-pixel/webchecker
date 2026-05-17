@@ -385,9 +385,7 @@ $_ckBase = _computeCheckerBase();
         .appearance-btn-group{display:flex;flex-wrap:wrap;gap:8px}
         .appearance-btn{padding:7px 16px;border-radius:10px;border:2px solid var(--line);background:var(--surface);font-size:13px;font-weight:700;color:var(--text);cursor:pointer;transition:border-color .15s,background .15s}
         .appearance-btn.active{border-color:var(--primary);background:var(--primary);color:#fff}
-        .color-palette{display:flex;gap:10px;flex-wrap:wrap}
-        .color-swatch{width:30px;height:30px;border-radius:50%;border:3px solid transparent;cursor:pointer;transition:transform .15s,border-color .15s}
-        .color-swatch.active{border-color:var(--text);transform:scale(1.15)}
+
         .camera-wrap{display:flex;flex-direction:column;gap:12px}
         .camera-frame{position:relative;border-radius:18px;overflow:hidden;background:#0b1220;min-height:320px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
         .camera-video{display:block;width:100%;height:min(62vh,520px);object-fit:cover;background:#0b1220}
