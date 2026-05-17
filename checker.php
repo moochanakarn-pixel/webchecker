@@ -748,13 +748,6 @@ $_ckBase = _computeCheckerBase();
 
             <div id="tabPanelAppearance" class="tab-panel">
                 <div class="modal-section">
-                    <div class="modal-section-title">Theme</div>
-                    <div class="appearance-btn-group">
-                        <button class="appearance-btn" data-theme="default">☀️ Default</button>
-                        <button class="appearance-btn" data-theme="contrast">⚡ High Contrast</button>
-                    </div>
-                </div>
-                <div class="modal-section">
                     <div class="modal-section-title">ขนาด Card</div>
                     <div class="appearance-btn-group">
                         <button class="appearance-btn" data-card="s">S</button>
@@ -770,17 +763,6 @@ $_ckBase = _computeCheckerBase();
                         <input type="range" id="fontScaleSlider" min="85" max="130" step="5" value="100" style="flex:1;accent-color:var(--primary)">
                         <span style="font-size:11px;color:var(--muted)">ใหญ่</span>
                         <span id="fontScaleLabel" style="font-size:12px;font-weight:bold;min-width:36px;text-align:right;color:var(--text)">100%</span>
-                    </div>
-                </div>
-                <div class="modal-section">
-                    <div class="modal-section-title">สีหลัก</div>
-                    <div class="color-palette">
-                        <button class="color-swatch" data-accent="blue"   style="background:#1683ff" title="Blue"></button>
-                        <button class="color-swatch" data-accent="green"  style="background:#12a150" title="Green"></button>
-                        <button class="color-swatch" data-accent="red"    style="background:#e44c3a" title="Red"></button>
-                        <button class="color-swatch" data-accent="orange" style="background:#ff8a1f" title="Orange"></button>
-                        <button class="color-swatch" data-accent="purple" style="background:#7c3aed" title="Purple"></button>
-                        <button class="color-swatch" data-accent="slate"  style="background:#475569" title="Slate"></button>
                     </div>
                 </div>
                 <div style="margin-top:20px;text-align:right">
@@ -1093,28 +1075,6 @@ $_ckBase = _computeCheckerBase();
         }
 
         // ── Appearance / Theme ──────────────────────────────────────────
-        const _appearanceThemes = {
-            default: {
-                '--bg':'#edf5ff','--bg-2':'#fff7ed','--surface':'#ffffff','--surface-soft':'#f8fbff',
-                '--text':'#122033','--muted':'#6b7a90','--line':'#dbe8f7',
-                '--secondary-soft':'#fff1e4',
-                '--success-soft':'#e6f8ee','--danger-soft':'#ffe8e4'
-            },
-            contrast: {
-                '--bg':'#ffffff','--bg-2':'#f0f0f0','--surface':'#ffffff','--surface-soft':'#f5f5f5',
-                '--text':'#000000','--muted':'#333333','--line':'#999999',
-                '--secondary-soft':'#ffe0b2',
-                '--success-soft':'#c8f5d8','--danger-soft':'#ffd0cc'
-            }
-        };
-        const _appearanceAccents = {
-            blue:   {'--primary':'#1683ff','--primary-dark':'#0f69cf'},
-            green:  {'--primary':'#12a150','--primary-dark':'#0d7d3e'},
-            red:    {'--primary':'#e44c3a','--primary-dark':'#c23526'},
-            orange: {'--primary':'#ff8a1f','--primary-dark':'#d96e0a'},
-            purple: {'--primary':'#7c3aed','--primary-dark':'#6025c0'},
-            slate:  {'--primary':'#475569','--primary-dark':'#334155'}
-        };
         const _cardSizes = {s:'160px', m:'220px', l:'280px', xl:'360px'};
         const _appearanceKey = 'kds_appearance';
 
@@ -1127,12 +1087,7 @@ $_ckBase = _computeCheckerBase();
         }
         function applyAppearanceSettings() {
             const s = loadAppearanceSettings();
-            const theme = _appearanceThemes[s.theme] || _appearanceThemes.default;
-            const accent = _appearanceAccents[s.accent] || _appearanceAccents.blue;
-            const root = document.documentElement.style;
-            Object.entries(theme).forEach(function(e){ root.setProperty(e[0], e[1]); });
-            Object.entries(accent).forEach(function(e){ root.setProperty(e[0], e[1]); });
-            root.setProperty('--card-min-w', _cardSizes[s.card] || '220px');
+            document.documentElement.style.setProperty('--card-min-w', _cardSizes[s.card] || '220px');
             const pageEl = document.querySelector('.page');
             if (pageEl) pageEl.style.zoom = (parseInt(s.font || '100', 10) / 100);
         }
@@ -1145,18 +1100,10 @@ $_ckBase = _computeCheckerBase();
         }
         function syncAppearanceUI() {
             const s = loadAppearanceSettings();
-            const theme = (_appearanceThemes[s.theme] ? s.theme : 'default');
-            const accent = s.accent || 'blue';
             const card = s.card || 'm';
             const font = parseInt(s.font || '100', 10);
-            document.querySelectorAll('[data-theme]').forEach(function(b){
-                b.classList.toggle('active', b.dataset.theme === theme);
-            });
             document.querySelectorAll('[data-card]').forEach(function(b){
                 b.classList.toggle('active', b.dataset.card === card);
-            });
-            document.querySelectorAll('[data-accent]').forEach(function(b){
-                b.classList.toggle('active', b.dataset.accent === accent);
             });
             const slider = document.getElementById('fontScaleSlider');
             const label  = document.getElementById('fontScaleLabel');
@@ -1164,23 +1111,9 @@ $_ckBase = _computeCheckerBase();
             if (label)  label.textContent = font + '%';
         }
         function initAppearancePanel() {
-            document.querySelectorAll('[data-theme]').forEach(function(btn) {
-                btn.addEventListener('click', function() {
-                    saveAppearanceSettings({theme: btn.dataset.theme});
-                    applyAppearanceSettings();
-                    syncAppearanceUI();
-                });
-            });
             document.querySelectorAll('[data-card]').forEach(function(btn) {
                 btn.addEventListener('click', function() {
                     saveAppearanceSettings({card: btn.dataset.card});
-                    applyAppearanceSettings();
-                    syncAppearanceUI();
-                });
-            });
-            document.querySelectorAll('[data-accent]').forEach(function(btn) {
-                btn.addEventListener('click', function() {
-                    saveAppearanceSettings({accent: btn.dataset.accent});
                     applyAppearanceSettings();
                     syncAppearanceUI();
                 });
