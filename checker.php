@@ -751,7 +751,6 @@ $_ckBase = _computeCheckerBase();
                     <div class="modal-section-title">Theme</div>
                     <div class="appearance-btn-group">
                         <button class="appearance-btn" data-theme="default">☀️ Default</button>
-                        <button class="appearance-btn" data-theme="dark">🌙 Dark</button>
                         <button class="appearance-btn" data-theme="contrast">⚡ High Contrast</button>
                     </div>
                 </div>
@@ -1102,10 +1101,10 @@ $_ckBase = _computeCheckerBase();
                 '--success-soft':'#e6f8ee','--danger-soft':'#ffe8e4'
             },
             contrast: {
-                '--bg':'#000000','--bg-2':'#0a0a0a','--surface':'#1a1a1a','--surface-soft':'#222222',
-                '--text':'#ffffff','--muted':'#bbbbbb','--line':'#444444',
-                '--secondary-soft':'#1a1200',
-                '--success-soft':'#003300','--danger-soft':'#330000'
+                '--bg':'#ffffff','--bg-2':'#f0f0f0','--surface':'#ffffff','--surface-soft':'#f5f5f5',
+                '--text':'#000000','--muted':'#333333','--line':'#999999',
+                '--secondary-soft':'#ffe0b2',
+                '--success-soft':'#c8f5d8','--danger-soft':'#ffd0cc'
             }
         };
         const _appearanceAccents = {
@@ -1146,7 +1145,7 @@ $_ckBase = _computeCheckerBase();
         }
         function syncAppearanceUI() {
             const s = loadAppearanceSettings();
-            const theme = s.theme || 'default';
+            const theme = (_appearanceThemes[s.theme] ? s.theme : 'default');
             const accent = s.accent || 'blue';
             const card = s.card || 'm';
             const font = parseInt(s.font || '100', 10);
