@@ -2,6 +2,29 @@
 
 ---
 
+## v1.8.0 — 2026-05-17
+
+### 🆕 Features
+- **[Settings] Appearance panel** — เพิ่มแท็บ "หน้าตา" ในหน้าตั้งค่า: เลือกขนาด Card (S/M/L/XL) และปรับ Font Scale (85–130%) พร้อมปุ่ม "↺ คืนค่า Default" — บันทึกลง `localStorage` (`kds_appearance`) ไม่หาย refresh
+- **[Settings] ชื่อเครื่อง auto-fill** — เมื่อกรอก Computer ID ระบบ query `computername` table จาก DB โดยอัตโนมัติและแสดงชื่อเครื่องเป็น read-only (ไม่แก้ไขได้) พร้อม success/error state
+- **[Offline] DB Offline Banner** — แสดง banner แดงบนสุดหน้าจอ "ระบบ OFFLINE" เมื่อ polling ล้มเหลวติดต่อกัน 3 ครั้ง พร้อมปุ่ม "🔄 ลองใหม่" และหาย banner อัตโนมัติเมื่อเชื่อมต่อได้อีกครั้ง
+
+### 🐛 Bug Fixes
+- **[Settings] Save double-submit** — เพิ่ม guard ปุ่ม "บันทึกค่าระบบ" (disable + ข้อความ "กำลังบันทึก...") ระหว่างส่ง request ป้องกัน submit ซ้ำ
+- **[Barcode] Double Enter** — เพิ่ม `e.stopPropagation()` บน `keydown` ของ barcode input ป้องกัน Enter ผ่านไปกระตุ้น handler อื่น
+- **[Barcode] QR Code alphanumeric** — เปลี่ยน regex filter จาก `/^[0-9]$/` เป็น `/^[0-9A-Za-z\-]$/` รองรับ QR code ที่มีตัวอักษรและ `-`
+- **[Barcode] Buffer timeout สั้นเกิน** — ขยาย threshold จาก 280ms เป็น 500ms กัน scanner ที่ส่ง char ช้าทำให้ buffer แตก
+
+### ♻️ Refactoring
+- **[Settings] Port field ลบออก** — ลบช่อง DB Port ออกจาก UI และล็อคค่าเป็น 3307 ด้วย `<input type="hidden">` (ค่าเก่าใน `settings.local.php` ถูก normalize ทับอัตโนมัติเมื่อ save)
+- **[Settings] ปุ่มทดสอบการเชื่อมต่อ** — ย้ายมาอยู่ inline กับ Database Name แทน Port เดิม ลดความยาวแถว
+- **[CSS] Theme variables** — แทนที่สีแบบ hardcode 14+ จุด ด้วย CSS variables (`--surface`, `--surface-soft`, `--line`, `--text`, `--muted`, `--primary`) เพื่อรองรับ theming ในอนาคต
+
+### ⚙️ API
+- เพิ่ม action `lookup_computer_name` — รับ `computer_id` → query `computername` WHERE `Deleted = 0` → คืน `computer_name`
+
+---
+
 ## v1.7.0 — 2026-05-14
 
 ### 🆕 Features

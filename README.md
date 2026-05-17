@@ -2,7 +2,7 @@
 
 ระบบ Kitchen Display System (KDS) สำหรับแสดงคิวอาหารในครัว รองรับการ checkout, สแกนบาร์โค้ด และควบคุมสินค้าหมด
 
-**เวอร์ชันปัจจุบัน:** v1.7.0
+**เวอร์ชันปัจจุบัน:** v1.8.0
 
 ---
 
@@ -16,7 +16,7 @@
 | `auth_check.php` | ตรวจสอบสิทธิ์การเข้าถึง |
 | `screen_lock.php` | หน้า screen lock |
 | `screen_lock.js` | Logic การ lock/unlock หน้าจอ |
-| `settings.local.php` | ค่า local เฉพาะเครื่อง (DB credentials ฯลฯ) |
+| `settings.local.php` | ค่า local เฉพาะเครื่อง (DB credentials ฯลฯ) — ไม่ track ใน git |
 | `KDS_TEMPLATE/` | Template สำหรับติดตั้ง KDS หลายจุด (subfolder) |
 
 ---
@@ -36,7 +36,7 @@
 ```php
 return [
     'db_host'     => '127.0.0.1',
-    'db_port'     => 3306,
+    'db_port'     => 3307,   // ล็อคไว้ที่ 3307 — ไม่ต้องแก้
     'db_name'     => 'ชื่อฐานข้อมูล',
     'db_user'     => 'username',
     'db_pass'     => 'password',
@@ -44,6 +44,8 @@ return [
     'current_computer_id' => 1,
 ];
 ```
+
+> **หมายเหตุ:** ค่า `db_port` ถูกล็อคที่ 3307 และไม่แสดงในหน้า Settings UI — หากต้องการเปลี่ยน ให้แก้ `settings.local.php` โดยตรง
 
 ค่าสำคัญใน `config.php`:
 
@@ -62,7 +64,7 @@ return [
 - **แสดงคิวอาหาร** — แสดง order ที่รอทำและกำลังทำอยู่แบบ real-time
 - **Checkout** — กดยืนยันรายการเสร็จแล้ว พร้อม 2-step checkout option
 - **Undo** — ย้อนกลับรายการที่ checkout ผิด
-- **Barcode scan** — สแกนบาร์โค้ดจากคีย์บอร์ดหรือกล้อง
+- **Barcode scan** — สแกนบาร์โค้ดจากคีย์บอร์ดหรือกล้อง รองรับ numeric และ alphanumeric (QR code)
 - **กล้องสแกนต่อเนื่อง** — เปิดกล้องค้างและสแกนอัตโนมัติทุก 800ms
 - **SET menu** — รองรับการแสดงเมนูชุด (parent/child cards)
 - **สินค้าหมด** — ควบคุมสถานะสินค้าหมดได้จากหน้าจอ
@@ -71,6 +73,9 @@ return [
 - **Multi-KDS** — ติดตั้งหลายจุดในโฟลเดอร์ย่อย (`KDS_TEMPLATE/`) บน IIS
 - **Staff login บน topbar** — กรอกรหัสพนักงานได้จากหน้าหลัก บังคับ login ก่อน checkout ทุกช่องทาง
 - **Zone lock** — ล็อคโซนไม่ให้เปลี่ยนโดยไม่ตั้งใจ ตั้งค่าผ่าน settings modal; จำโซนที่เลือกข้ามรอบ refresh
+- **Appearance panel** — ปรับขนาด Card (S/M/L/XL) และ Font Scale (85–130%) ผ่านแท็บ "หน้าตา" ใน Settings; บันทึกใน `localStorage`
+- **DB Offline Banner** — แสดง banner แจ้งเตือนเมื่อ polling ล้มเหลว 3 ครั้งติดกัน; หายอัตโนมัติเมื่อกลับมา online
+- **ชื่อเครื่อง auto-fill** — Settings จะ query ชื่อเครื่องจาก `computername` table อัตโนมัติเมื่อกรอก Computer ID
 
 ---
 
@@ -80,6 +85,12 @@ return [
 
 | เวอร์ชัน | รายการ |
 |---|---|
+| v1.8.0 | Save settings double-submit |
+| v1.8.0 | Barcode double Enter / alphanumeric / buffer timeout |
+| v1.7.0 | Filter chip double-toggle |
+| v1.7.0 | Zone รีเซ็ตเมื่อ localStorage หาย (zone_lock=ON) |
+| v1.6.0 | `finish_staff_id = 0` validation ผิด |
+| v1.6.0 | CURDATE() timezone mismatch (เปลี่ยนเป็น PHP `date()`) |
 | v1.5.0 | บังคับ login ก่อน checkout |
 | v1.5.0 | Zone lock — ซ่อนปุ่มเปลี่ยนโซนเมื่อ lock |
 | v1.5.0 | จำโซนข้ามรอบ refresh ด้วย localStorage |
@@ -96,8 +107,6 @@ return [
 
 | ความเสี่ยง | รายการ |
 |---|---|
-| 🟠 กลาง | กด Checkout เร็วๆ 2 ครั้ง อาจ submit ซ้ำ |
-| 🟠 กลาง | Barcode buffer reset ผิดจังหวะเมื่อ checkout fail |
 | 🟡 ต่ำ | Screen lock kick ช้า ~8 วินาที |
 | 🟡 ต่ำ | Undo state อาจไม่ sync กับ DB ในบางกรณี |
 
