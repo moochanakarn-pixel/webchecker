@@ -1002,7 +1002,7 @@ $_ckBase = _computeCheckerBase();
 
         function queueGlobalBarcodeDigit(digit) {
             const now = Date.now();
-            const isFreshScan = barcodeCaptureState.awaitingFreshScan || (now - barcodeCaptureState.lastAt > 280) || !barcodeCaptureState.buffer;
+            const isFreshScan = barcodeCaptureState.awaitingFreshScan || (now - barcodeCaptureState.lastAt > 500) || !barcodeCaptureState.buffer;
             if (isFreshScan) {
                 const input = document.getElementById('barcodeInput');
                 if (input) input.value = '';
@@ -2815,6 +2815,7 @@ $_ckBase = _computeCheckerBase();
             barcodeInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter' && getBarcodeAutoSubmitEnabled()) {
                     e.preventDefault();
+                    e.stopPropagation();
                     checkoutBarcode();
                 }
             });
@@ -2945,7 +2946,7 @@ $_ckBase = _computeCheckerBase();
             const targetIsBarcode = target && target.id === 'barcodeInput';
             if (isEditableElement(target) && !targetIsBarcode) return;
 
-            if (/^[0-9]$/.test(event.key)) {
+            if (/^[0-9A-Za-z\-]$/.test(event.key)) {
                 if (targetIsBarcode) {
                     return;
                 }
