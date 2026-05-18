@@ -2620,11 +2620,12 @@ function initSoundSettings() {
                 if (mode === 2) {
                     qtyToFinish = parentQty;
                 } else if (mode === 3 && parentQty > 1) {
+                    isSubmitting = true;
                     const chosen = await openCheckoutQtyPopup(
                         String(clickedRow.ProductName || clickedRow.MenuName || ''),
                         parentQty
                     );
-                    if (chosen === null) return; // user cancelled
+                    if (chosen === null) { isSubmitting = false; return; }
                     qtyToFinish = chosen;
                 }
             }
@@ -2676,7 +2677,7 @@ function initSoundSettings() {
                 if (!alreadyDone) {
                     showNotice(msg || 'checkout ไม่สำเร็จ', 'error');
                 }
-                loadAll();
+                await loadAll();
             } finally {
                 isSubmitting = false;
                 updateView();
@@ -2817,7 +2818,7 @@ function initSoundSettings() {
             } catch (error) {
                 setStatusText('เกิดข้อผิดพลาด');
                 showNotice(error.message || 'จบสถานะไม่สำเร็จ', 'error');
-                loadAll();
+                await loadAll();
             } finally {
                 isSubmitting = false;
                 updateView();
@@ -2860,7 +2861,7 @@ function initSoundSettings() {
             } catch (error) {
                 setStatusText('เกิดข้อผิดพลาด');
                 showNotice(error.message || 'ย้อนกลับไม่สำเร็จ', 'error');
-                loadAll();
+                await loadAll();
             } finally {
                 isSubmitting = false;
                 updateView();
