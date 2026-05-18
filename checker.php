@@ -3135,6 +3135,9 @@ function initSoundSettings() {
                 if (state.finishedDrawerOpen || activeRefreshTick % finishedRefreshEvery === 0) {
                     loadFinishedRows();
                 }
+                if (currentZoneId > 0 && activeRefreshTick % 4 === 0) {
+                    filterCardsByZone(currentZoneId);
+                }
             } catch (e) {
                 console.warn('auto-refresh error', e);
             }
