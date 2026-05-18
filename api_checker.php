@@ -175,6 +175,7 @@ function normalizeSystemSettingsPayload($source)
         'sound_enabled' => !empty($source['sound_enabled']) ? 1 : 0,
         'barcode_camera_enabled' => !empty($source['barcode_camera_enabled']) ? 1 : 0,
         'kds_two_step_checkout' => !empty($source['kds_two_step_checkout']) ? 1 : 0,
+        'checkout_qty_mode' => max(1, min(3, (int)($source['checkout_qty_mode'] ?? 1))),
         'out_of_stock_enabled' => isset($source['out_of_stock_enabled']) ? (!empty($source['out_of_stock_enabled']) ? 1 : 0) : 1,
         'allowed_sale_mode_ids' => parseIdList($source['allowed_sale_mode_ids'] ?? ''),
         'allowed_zone_ids' => parseIdList($source['allowed_zone_ids'] ?? ''),
@@ -231,6 +232,7 @@ function systemSettingsSnapshot()
         'sound_enabled' => !empty(localSetting($local, 'sound_enabled', defined('SOUND_ALERT_ENABLED_DEFAULT') ? SOUND_ALERT_ENABLED_DEFAULT : false)) ? 1 : 0,
         'barcode_camera_enabled' => !empty(localSetting($local, 'barcode_camera_enabled', defined('BARCODE_CAMERA_ENABLED_DEFAULT') ? BARCODE_CAMERA_ENABLED_DEFAULT : true)) ? 1 : 0,
         'kds_two_step_checkout' => !empty(localSetting($local, 'kds_two_step_checkout', defined('KDS_TWO_STEP_CHECKOUT_DEFAULT') ? KDS_TWO_STEP_CHECKOUT_DEFAULT : false)) ? 1 : 0,
+        'checkout_qty_mode' => max(1, min(3, (int)localSetting($local, 'checkout_qty_mode', 1))),
         'out_of_stock_enabled' => (localSetting($local, 'out_of_stock_enabled', 1) !== 0) ? 1 : 0,
         'allowed_sale_mode_ids' => parseIdList(localSetting($local, 'allowed_sale_mode_ids', array())),
         'allowed_zone_ids' => parseIdList(localSetting($local, 'allowed_zone_ids', array())),
@@ -325,6 +327,7 @@ function writeSystemSettingsFile($settings)
         'sound_enabled' => !empty($settings['sound_enabled']) ? 1 : 0,
         'barcode_camera_enabled' => !empty($settings['barcode_camera_enabled']) ? 1 : 0,
         'kds_two_step_checkout' => !empty($settings['kds_two_step_checkout']) ? 1 : 0,
+        'checkout_qty_mode' => max(1, min(3, (int)($settings['checkout_qty_mode'] ?? 1))),
         'out_of_stock_enabled' => isset($settings['out_of_stock_enabled']) ? (!empty($settings['out_of_stock_enabled']) ? 1 : 0) : 1,
         'allowed_sale_mode_ids' => parseIdList($settings['allowed_sale_mode_ids'] ?? ''),
         'allowed_zone_ids' => parseIdList($settings['allowed_zone_ids'] ?? ''),
@@ -1851,6 +1854,8 @@ function checkoutOne($conn)
     $subProcessId = requestInt('SubProcessID');
     $printerId = requestInt('PrinterID');
     $finishStaffId = requestInt('finish_staff_id', DEFAULT_FINISH_STAFF_ID);
+    $qtyToFinishParam = isset($_POST['qty_to_finish']) ? (float)$_POST['qty_to_finish'] : 1;
+    if ($qtyToFinishParam <= 0) $qtyToFinishParam = 1;
 
     $conn->begin_transaction();
 
@@ -1866,7 +1871,8 @@ function checkoutOne($conn)
             throw new Exception('จำนวนคงเหลือไม่ถูกต้อง');
         }
 
-        applyCheckoutSplit($conn, $row, 1, $finishStaffId, $now);
+        $qtyToFinish = min($qtyToFinishParam, $parentCurrentQty);
+        applyCheckoutSplit($conn, $row, $qtyToFinish, $finishStaffId, $now);
 
         $childRows = fetchLockedChildRows($conn, (int)$row['ProductLevelID'], (int)$row['ProcessID'], (int)$row['PrinterID'], array(PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS));
         foreach ($childRows as $childRow) {
@@ -1875,7 +1881,7 @@ function checkoutOne($conn)
                 continue;
             }
 
-            $childQtyToFinish = calculateChildCheckoutQty($parentCurrentQty, $childQty);
+            $childQtyToFinish = calculateChildCheckoutQty($parentCurrentQty, $childQty, $qtyToFinish);
             if ($childQtyToFinish <= 0) {
                 continue;
             }
@@ -1886,11 +1892,11 @@ function checkoutOne($conn)
 
         $menuName = isset($row['ProductName']) ? (string)$row['ProductName'] : '-';
         $tableName = isset($row['DisplayTableName']) ? (string)$row['DisplayTableName'] : '-';
-        writeActivityLog('CHECKOUT', 'Table:' . $tableName . ' Menu:' . $menuName . ' Process:' . $processId, $finishStaffId);
+        writeActivityLog('CHECKOUT', 'Table:' . $tableName . ' Menu:' . $menuName . ' Qty:' . $qtyToFinish . ' Process:' . $processId, $finishStaffId);
 
         jsonResponse(array(
             'success' => true,
-            'message' => 'checkout 1 รายการเรียบร้อย',
+            'message' => 'checkout ' . toDecimalString($qtyToFinish, 0) . ' รายการเรียบร้อย',
             'refresh_finished' => true,
         ));
     } catch (Throwable $e) {
@@ -2629,28 +2635,19 @@ function fetchLockedFinishedChildRowsForUndo($conn, $finishedParentRow)
     return $rows;
 }
 
-function calculateChildCheckoutQty($parentQty, $childQty)
+function calculateChildCheckoutQty($parentQty, $childQty, $qtyFinishing = 1)
 {
-    $parentQty = (float)$parentQty;
-    $childQty = (float)$childQty;
+    $parentQty    = (float)$parentQty;
+    $childQty     = (float)$childQty;
+    $qtyFinishing = (float)$qtyFinishing;
 
-    if ($childQty <= 0) {
-        return 0;
-    }
-    if ($parentQty <= 1) {
-        return $childQty;
-    }
+    if ($childQty <= 0 || $parentQty <= 0) return 0;
+
+    if ($qtyFinishing >= $parentQty) return $childQty;
 
     $perUnit = $childQty / $parentQty;
-    if ($perUnit <= 0) {
-        return 0;
-    }
-
-    if ($perUnit > $childQty) {
-        $perUnit = $childQty;
-    }
-
-    return (float)toDecimalString($perUnit, 2);
+    $result  = $perUnit * $qtyFinishing;
+    return (float)toDecimalString(min($result, $childQty), 2);
 }
 
 function applyCheckoutSplit($conn, $row, $qtyToFinish, $finishStaffId, $now)

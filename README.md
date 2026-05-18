@@ -2,7 +2,7 @@
 
 ระบบ Kitchen Display System (KDS) สำหรับแสดงคิวอาหารในครัว รองรับการ checkout, สแกนบาร์โค้ด และควบคุมสินค้าหมด
 
-**เวอร์ชันปัจจุบัน:** v1.9.0
+**เวอร์ชันปัจจุบัน:** v1.10.0
 
 ---
 
@@ -123,6 +123,20 @@ return [
 ---
 
 # Patch Notes
+
+## v1.10.0 — 2026-05-18
+
+### 🆕 Features
+- **[Settings] Checkout จำนวน Mode** — เพิ่มตั้งค่า "การ Checkout เมื่อจำนวน > 1" มี 3 โหมด:
+  - **Mode 1 (ค่าเริ่มต้น):** ทีละ 1 จำนวน — ส่ง `qty_to_finish=1` ทุกครั้ง เหมือนเดิม
+  - **Mode 2:** จบทั้งหมดในครั้งเดียว — ส่ง `qty_to_finish=ProductAmount` ทุกครั้ง
+  - **Mode 3:** เลือกจำนวนเอง — เปิด popup stepper ให้เชฟเลือก 1–N ก่อนส่ง (เฉพาะเมื่อ qty > 1)
+- **[API] `checkoutOne` รับ `qty_to_finish`** — รองรับการ checkout บางส่วน, split SubProcessID row, คำนวณ child qty ตามสัดส่วน
+
+### 🐛 Bug Fixes
+- **[UI] Red error bar เมื่อกดรัวตอนหมดจอ** — suppress "ถูก checkout ไปแล้ว" error — ไม่แสดง banner เมื่อรายการนั้น checkout สำเร็จแล้ว (race condition ระหว่าง tap กับ state refresh)
+
+---
 
 ## v1.9.0 — 2026-05-18
 
