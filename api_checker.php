@@ -1190,11 +1190,9 @@ function fetchActiveRows($conn)
     $allowedPrinterIds = fetchAllowedPrinterIds($conn, getEffectiveComputerId());
     $stationFilter = getStationFilter();
 
-    // รวม voided/deleted (98) ด้วยเพื่อแสดงสีเทา
     $statusList = implode(', ', array(
         (int)PROCESS_STATUS_ACTIVE,
         (int)PROCESS_STATUS_IN_PROCESS,
-        (int)PROCESS_STATUS_VOIDED
     ));
     $where = array('opf.ProcessStatus IN (' . $statusList . ')');
     appendAllowedPrinterFilter($where, $allowedPrinterIds, 'opf');
