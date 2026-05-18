@@ -87,6 +87,7 @@ return [
 |---|---|
 | v1.9.0 | รายการยกเลิก (voided) ไม่แสดงบนจอ KDS |
 | v1.9.0 | Notice "checkout สำเร็จ" บังปุ่มกด |
+| v1.9.0 | Zone table cache stale — โต๊ะย้ายโซนแล้วการ์ดไม่โผล่ |
 | v1.8.0 | Save settings double-submit |
 | v1.8.0 | Barcode double Enter / alphanumeric / buffer timeout |
 | v1.7.0 | Filter chip double-toggle |
@@ -118,3 +119,158 @@ return [
 
 - ไฟล์ `settings.local.php` ไม่ถูก track ใน git (มี DB credentials)
 - รองรับ IIS และ Apache
+
+---
+
+# Patch Notes
+
+## v1.9.0 — 2026-05-18
+
+### 🐛 Bug Fixes
+- **[UI] ซ่อนรายการยกเลิก** — ไม่ดึง ProcessStatus 98 (voided) มาแสดงบนจอ KDS อีกต่อไป — ลบ CSS, rendering, และ sound tracking ที่เกี่ยวข้องออก
+- **[UI] ลบ notice "checkout สำเร็จ"** — เอา popup แจ้งเตือนสำเร็จออกทั้ง 2 จุด (กดการ์ด + barcode) เพราะบังปุ่มกด — คง notice error และ 2-step "ยืนยันรายการแล้ว" ไว้
+- **[Zone] Zone table cache stale** — `cachedZoneTableIds` refresh ทุก 4 poll cycle (~60 วิ) แทนการ refresh เฉพาะตอนเปลี่ยนโซน — แก้ปัญหาโต๊ะย้ายโซนแล้วการ์ดไม่โผล่จนกว่าจะ refresh มือ
+- **[UI] SET menu label สีน้ำเงินซ้อน moved badge** — เปลี่ยน `.parent-name-label` จาก `--primary` (น้ำเงิน) เป็นเขียว (`#16a34a`) แยกออกจาก moved card indicator
+
+---
+
+## v1.8.0 — 2026-05-17
+
+### 🆕 Features
+- **[Settings] Appearance panel** — เพิ่มแท็บ "หน้าตา" ในหน้าตั้งค่า: เลือกขนาด Card (S/M/L/XL) และปรับ Font Scale (85–130%) พร้อมปุ่ม "↺ คืนค่า Default" — บันทึกลง `localStorage` (`kds_appearance`) ไม่หาย refresh
+- **[Settings] ชื่อเครื่อง auto-fill** — เมื่อกรอก Computer ID ระบบ query `computername` table จาก DB โดยอัตโนมัติและแสดงชื่อเครื่องเป็น read-only พร้อม success/error state
+- **[Offline] DB Offline Banner** — แสดง banner แดงบนสุดหน้าจอ "ระบบ OFFLINE" เมื่อ polling ล้มเหลวติดต่อกัน 3 ครั้ง พร้อมปุ่ม "🔄 ลองใหม่"
+
+### 🐛 Bug Fixes
+- **[Settings] Save double-submit** — เพิ่ม guard ปุ่ม "บันทึกค่าระบบ" (disable + "กำลังบันทึก...") ระหว่างส่ง request
+- **[Barcode] Double Enter** — เพิ่ม `e.stopPropagation()` ป้องกัน Enter กระตุ้น handler ซ้ำ
+- **[Barcode] QR Code alphanumeric** — regex `/^[0-9]$/` → `/^[0-9A-Za-z\-]$/`
+- **[Barcode] Buffer timeout สั้นเกิน** — ขยาย threshold 280ms → 500ms
+
+### ♻️ Refactoring
+- **[Settings] Port field ลบออก** — ล็อคค่า DB Port เป็น 3307 ด้วย hidden input
+- **[Settings] ปุ่มทดสอบการเชื่อมต่อ** — ย้ายมาอยู่ inline กับ Database Name
+- **[CSS] Theme variables** — แทนที่สีแบบ hardcode 14+ จุด ด้วย CSS variables
+
+### ⚙️ API
+- เพิ่ม action `lookup_computer_name` — query `computername` WHERE `Deleted = 0` → คืน `computer_name`
+
+---
+
+## v1.7.0 — 2026-05-14
+
+### 🆕 Features
+- **[Filter] กรอง SaleMode ต่อสถานี** — แต่ละ KDS เลือก SaleMode ได้ผ่าน Settings → บันทึกลง `settings.local.php` → กรองฝั่ง server
+- **[Filter] กรองโซนต่อสถานี (server-side)** — เพิ่ม zone filter (`allowed_zone_ids`) แยกจาก zone selector บน topbar
+- **[Filter] Smart SaleMode + Zone logic** — `TableID > 0` ผ่านตาม zone, `TableID = 0` กรองตาม SaleMode
+
+### 🐛 Bug Fixes
+- **[UI] Filter chip double-toggle** — เพิ่ม `e.preventDefault()` แก้ toggle ซ้ำ
+- **[Zone Lock] localStorage หาย → zone รีเซ็ต** — auto-select zone แรกจาก `allowed_zone_ids` เมื่อ localStorage ถูกล้าง
+
+### ⚙️ API
+- เพิ่ม `list_sale_modes`, `parseIdList()`, `getStationFilter()`
+- `fetchActiveRows` / `fetchFinishedRows` เพิ่ม `LEFT JOIN tableno` เฉพาะเมื่อ zone filter ใช้งาน
+
+---
+
+## v1.6.0 — 2026-05-13
+
+### 🆕 Features
+- **[Settings] toggle ปุ่มสินค้าหมด** — ซ่อน/แสดงปุ่ม "ปิดสินค้าหมด" บนแถบเครื่องมือได้
+
+### 🐛 Bug Fixes
+- **[Startup] ตรวจสอบ DB ก่อน restore staff** — ป้องกัน error loop เมื่อ DB ไม่พร้อม
+- **[API] `finish_staff_id` validation ผิด** — แก้ `<= 0` เป็น `< 0`
+- **[API] CURDATE() timezone mismatch** — เปลี่ยนเป็น PHP `date('Y-m-d')`
+
+### ⚙️ Config
+- `ACTIVE_ROWS_TODAY_ONLY`: เปลี่ยนค่าเริ่มต้นเป็น `true`
+- `RECENT_FINISHED_LIMIT`: เปลี่ยนจาก 0 เป็น 50
+
+---
+
+## v1.5.0 — 2026-05-06
+
+### 🆕 Features
+- **[Staff] บังคับ Login ก่อน Checkout** — ทั้ง 3 ช่องทาง (กดการ์ด, barcode, กล้อง)
+- **[Zone] ล็อคโซน** — ซ่อนปุ่มเปลี่ยนโซนบนหน้าหลัก
+- **[Zone] จำโซนข้ามรอบ refresh** — บันทึกลง localStorage
+
+---
+
+## v1.4.2 — 2026-05-06
+
+### 🐛 Bug Fixes
+- **[Security] SQL Injection ใน `tableExists()`** — เปลี่ยนเป็น `information_schema.TABLES` + prepared statement
+- **[API] `strtotime()` บนค่าว่าง** — เพิ่ม guard เมื่อ `finishedAt` เป็น null
+- **[API] Missing `isset()`** — ใน insert row
+
+---
+
+## v1.4.1 — 2026-05-06
+
+### 🐛 Bug Fixes
+- **[Finished] รายการเสร็จแล้วสะสมไม่หาย** — เปิด `FINISHED_ROWS_TODAY_ONLY = true`
+
+---
+
+## v1.4.0 — 2026-05-03
+
+### 🆕 Features
+- **SET menu display mode** — `displayflexibleproductatchecker = 1` แสดงหัวเมนู, `= 0` แสดงลูก
+
+### 🐛 Bug Fixes
+- **[SET menu] หัวเมนูโผล่กลับหลัง checkout ลูกครบ** — auto-checkout หัวเมื่อ checkout ลูกตัวสุดท้าย
+
+---
+
+## v1.3.1 — 2026-05-02
+
+### 🐛 Bug Fixes
+- **[screen_lock] PHP 500 error** — แก้ IIFE syntax เป็น named function `_slComputeBase()`
+
+---
+
+## v1.3.0 — 2026-05-02
+
+### 🆕 Features
+- **กล้องสแกนต่อเนื่อง** — สแกน barcode อัตโนมัติทุก 800ms
+- **Multi-KDS subfolder** — รองรับ `KDS_TEMPLATE/` บน IIS
+- **jsQR library** — fallback สำหรับ browser ที่ไม่รองรับ BarcodeDetector API
+
+### 🐛 Bug Fixes
+- **[multi-KDS]** settings บันทึกผิดที่, session ปนกัน, port validation
+- **[IIS]** Base URL และ API fetch URL ผิดสำหรับ subfolder
+- **[MySQL]** charset utf8mb4 → revert เป็น `utf8`
+
+---
+
+## v1.2.0 — 2026-05-01
+
+### 🆕 Features
+- **QR code scanning** — เพิ่ม format `qr_code` ใน BarcodeDetector API
+
+---
+
+## v1.1.0 — 2026-04-23
+
+### 🆕 Features
+- **Waiter Display** — หน้าจอแสดงคิวสำหรับพนักงาน (`waiter_display.php` + `api_waiter.php`)
+
+---
+
+## v1.0.1 — 2026-04-22
+
+### 🐛 Bug Fixes
+- **[API] PHP warnings ใน JSON response** — เพิ่ม output buffering
+- **[API] Error suppression** — ย้าย `@` ไปก่อน `require`
+
+---
+
+## v1.0.0 — 2026-04-22
+
+### 🆕 Initial Setup
+- ย้าย DB credentials ออกจาก code ไปไว้ใน `settings.local.php`
+- เพิ่ม `.gitignore` — ไม่ track `settings.local.php`
+- ระบบ KDS พร้อมใช้งาน: `checker.php`, `api_checker.php`, `config.php`, `auth_check.php`, `screen_lock.php`
