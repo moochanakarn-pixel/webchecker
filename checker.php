@@ -721,6 +721,20 @@ $_ckBase = _computeCheckerBase();
                         </div>
                         <input type="checkbox" id="kdsOutOfStockEnabled">
                     </label>
+                    <div style="padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-soft)">
+                        <div class="setting-check-title" style="margin-bottom:8px">การ Checkout เมื่อจำนวน &gt; 1</div>
+                        <div style="display:flex;flex-direction:column;gap:6px">
+                            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+                                <input type="radio" name="checkoutQtyMode" id="checkoutQtyMode1" value="1"> ทีละ 1 จำนวน <span style="font-size:11px;color:var(--muted)">(ค่าเริ่มต้น)</span>
+                            </label>
+                            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+                                <input type="radio" name="checkoutQtyMode" id="checkoutQtyMode2" value="2"> จบทั้งหมดในครั้งเดียว
+                            </label>
+                            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+                                <input type="radio" name="checkoutQtyMode" id="checkoutQtyMode3" value="3"> เลือกจำนวนเอง
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="modal-section">
@@ -884,7 +898,8 @@ $_ckBase = _computeCheckerBase();
             zoneChipsReady: false,
             soldOutProducts: [],
             soldOutKeyword: '',
-            kdsTwoStepCheckout: kdsTwoStepCheckoutDefault
+            kdsTwoStepCheckout: kdsTwoStepCheckoutDefault,
+            checkoutQtyMode: 1
         };
 
         const barcodeCaptureState = {
@@ -1912,6 +1927,9 @@ function initSoundSettings() {
             if (twoStepInput) twoStepInput.checked = Number(settings.kds_two_step_checkout || 0) === 1;
             const outOfStockInput = document.getElementById('kdsOutOfStockEnabled');
             if (outOfStockInput) outOfStockInput.checked = settings.out_of_stock_enabled !== 0;
+            const qtyModeInput = document.getElementById('checkoutQtyMode' + (Number(settings.checkout_qty_mode || 1)));
+            if (qtyModeInput) qtyModeInput.checked = true;
+            state.checkoutQtyMode = Number(settings.checkout_qty_mode || 1);
             const hideStaffInput = document.getElementById('hideStaffLogin');
             if (hideStaffInput) hideStaffInput.checked = Number(settings.hide_staff_login || 0) === 1;
             const barcodeScanVisibleInput = document.getElementById('barcodeScanVisible');
@@ -1950,6 +1968,7 @@ function initSoundSettings() {
                 kds_two_step_checkout: document.getElementById('kdsTwoStepCheckout').checked ? 1 : 0,
                 out_of_stock_enabled: (document.getElementById('kdsOutOfStockEnabled') || {}).checked ? 1 : 0,
                 hide_staff_login: (document.getElementById('hideStaffLogin') || {}).checked ? 1 : 0,
+                checkout_qty_mode: Number((document.querySelector('input[name="checkoutQtyMode"]:checked') || {value: 1}).value || 1),
                 allowed_sale_mode_ids: state.saleModeChipsReady ? getFilterChipValues('saleModeFilterChips') : ((state.currentSystemSettings && state.currentSystemSettings.allowed_sale_mode_ids) || []),
                 allowed_zone_ids: state.zoneChipsReady ? getFilterChipValues('zoneFilterChips') : ((state.currentSystemSettings && state.currentSystemSettings.allowed_zone_ids) || []),
             };
@@ -2044,6 +2063,7 @@ function initSoundSettings() {
             timerThresholds.red = Number(payload.threshold_red || thresholdRedDefault || 20);
             soundSettings.enabled = !!payload.sound_enabled;
             state.kdsTwoStepCheckout = !!payload.kds_two_step_checkout;
+            state.checkoutQtyMode = Number(payload.checkout_qty_mode || 1);
             applyBarcodeCameraAvailability();
             applyOutOfStockEnabled(payload.out_of_stock_enabled !== 0);
             applyStaffLoginMode(payload.hide_staff_login === 1);
@@ -2523,6 +2543,60 @@ function initSoundSettings() {
             updateView();
         }
 
+        // ── Checkout Qty Popup (mode 3) ───────────────────
+        let _checkoutQtyResolve = null;
+        let _checkoutQtyMax = 1;
+        let _checkoutQtyCurrent = 1;
+
+        function openCheckoutQtyPopup(productName, maxQty) {
+            return new Promise(function(resolve) {
+                _checkoutQtyResolve = resolve;
+                _checkoutQtyMax = maxQty;
+                _checkoutQtyCurrent = 1;
+                document.getElementById('checkoutQtyProductLabel').textContent = productName || '';
+                document.getElementById('checkoutQtyDisplay').textContent = '1';
+                document.getElementById('checkoutQtyMaxLabel').textContent = 'จำนวนสูงสุด: ' + maxQty;
+                const backdrop = document.getElementById('checkoutQtyBackdrop');
+                backdrop.style.display = 'flex';
+                requestAnimationFrame(function() {
+                    backdrop.style.opacity = '1';
+                    backdrop.style.pointerEvents = 'auto';
+                });
+            });
+        }
+
+        function closeCheckoutQtyPopup(result) {
+            const backdrop = document.getElementById('checkoutQtyBackdrop');
+            backdrop.style.opacity = '0';
+            backdrop.style.pointerEvents = 'none';
+            setTimeout(function() { backdrop.style.display = 'none'; }, 200);
+            if (_checkoutQtyResolve) {
+                _checkoutQtyResolve(result);
+                _checkoutQtyResolve = null;
+            }
+        }
+
+        (function() {
+            document.getElementById('checkoutQtyMinus').addEventListener('click', function() {
+                if (_checkoutQtyCurrent > 1) {
+                    _checkoutQtyCurrent--;
+                    document.getElementById('checkoutQtyDisplay').textContent = _checkoutQtyCurrent;
+                }
+            });
+            document.getElementById('checkoutQtyPlus').addEventListener('click', function() {
+                if (_checkoutQtyCurrent < _checkoutQtyMax) {
+                    _checkoutQtyCurrent++;
+                    document.getElementById('checkoutQtyDisplay').textContent = _checkoutQtyCurrent;
+                }
+            });
+            document.getElementById('checkoutQtyCancelBtn').addEventListener('click', function() {
+                closeCheckoutQtyPopup(null);
+            });
+            document.getElementById('checkoutQtyConfirmBtn').addEventListener('click', function() {
+                closeCheckoutQtyPopup(_checkoutQtyCurrent);
+            });
+        })();
+
         async function checkoutOne(productLevelId, processId, subProcessId, printerId) {
             if (isSubmitting) return;
             if (!staffIsLoggedIn) { showNotice('กรุณาเข้าสู่ระบบก่อน', 'error'); return; }
@@ -2536,6 +2610,23 @@ function initSoundSettings() {
             const currentStatus = Number(clickedRow.ProcessStatus || 0);
             const shouldConfirmFirst = isTwoStepEnabled && currentStatus !== 2;
 
+            // determine qty to finish based on mode (only for actual checkout, not confirm step)
+            let qtyToFinish = 1;
+            if (!shouldConfirmFirst) {
+                const parentQty = Number(clickedRow.ProductAmount || 1);
+                const mode = state.checkoutQtyMode || 1;
+                if (mode === 2) {
+                    qtyToFinish = parentQty;
+                } else if (mode === 3 && parentQty > 1) {
+                    const chosen = await openCheckoutQtyPopup(
+                        String(clickedRow.ProductName || clickedRow.MenuName || ''),
+                        parentQty
+                    );
+                    if (chosen === null) return; // user cancelled
+                    qtyToFinish = chosen;
+                }
+            }
+
             isSubmitting = true;
             setStatusText(shouldConfirmFirst ? 'กำลังยืนยันรายการ...' : 'กำลัง checkout...');
 
@@ -2547,6 +2638,9 @@ function initSoundSettings() {
                 params.set('SubProcessID', subProcessId);
                 params.set('PrinterID', printerId);
                 params.set('finish_staff_id', getFinishStaffId());
+                if (!shouldConfirmFirst) {
+                    params.set('qty_to_finish', qtyToFinish);
+                }
 
                 const response = await kdsApiFetch(_kdsBase + '/api_checker.php', {
                     method: 'POST',
@@ -2575,7 +2669,11 @@ function initSoundSettings() {
                 }
             } catch (error) {
                 setStatusText('เกิดข้อผิดพลาด');
-                showNotice(error.message || 'checkout ไม่สำเร็จ', 'error');
+                const msg = String(error.message || '');
+                const alreadyDone = msg.indexOf('checkout ไปแล้ว') !== -1 || msg.indexOf('ถูก checkout') !== -1;
+                if (!alreadyDone) {
+                    showNotice(msg || 'checkout ไม่สำเร็จ', 'error');
+                }
                 loadAll();
             } finally {
                 isSubmitting = false;
@@ -3056,6 +3154,7 @@ function initSoundSettings() {
 
         initFinishStaffId();
         state.kdsTwoStepCheckout = kdsTwoStepCheckoutDefault;
+        state.checkoutQtyMode = 1;
         initTimerThresholds();
         initSoundSettings();
         initSoundUI();
@@ -3169,6 +3268,28 @@ function initSoundSettings() {
     </script>
 
     <!-- Zone Modal -->
+    <!-- Checkout Qty Modal (mode 3) -->
+    <div class="modal-backdrop" id="checkoutQtyBackdrop" style="display:none;opacity:0;pointer-events:none">
+        <div class="modal" style="width:300px;max-width:92vw;padding:0;overflow:hidden">
+            <div class="modal-head" style="padding:14px 18px">
+                <span class="panel-title" style="font-size:15px">เลือกจำนวน Checkout</span>
+            </div>
+            <div style="padding:16px 18px 20px">
+                <div id="checkoutQtyProductLabel" style="font-size:13px;color:var(--muted);margin-bottom:14px;word-break:break-word"></div>
+                <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:20px">
+                    <button id="checkoutQtyMinus" class="btn btn-neutral" style="min-width:44px;min-height:44px;font-size:22px;padding:0">−</button>
+                    <span id="checkoutQtyDisplay" style="font-size:32px;font-weight:bold;min-width:48px;text-align:center;color:var(--text)">1</span>
+                    <button id="checkoutQtyPlus" class="btn btn-neutral" style="min-width:44px;min-height:44px;font-size:22px;padding:0">+</button>
+                </div>
+                <div id="checkoutQtyMaxLabel" style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:16px"></div>
+                <div style="display:flex;gap:8px">
+                    <button id="checkoutQtyCancelBtn" class="btn btn-neutral" style="flex:1">ยกเลิก</button>
+                    <button id="checkoutQtyConfirmBtn" class="btn btn-checkout-dark" style="flex:2">Checkout</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-backdrop" id="zoneModalBackdrop">
         <div class="modal" id="zoneModal" style="width:340px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column">
             <div class="modal-head">
