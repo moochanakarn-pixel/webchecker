@@ -2458,9 +2458,11 @@ function initSoundSettings() {
             }) || null;
         }
 
-        function applyCheckoutToState(row) {
+        function applyCheckoutToState(row, qtyToFinish) {
             if (!row) return;
-            const qty = Number(row.ProductAmount || 0);
+            qtyToFinish = Number(qtyToFinish) > 0 ? Number(qtyToFinish) : 1;
+            const currentQty = Number(row.ProductAmount || 0);
+            const remainingQty = currentQty - qtyToFinish;
             const nextActiveRows = [];
             let removedRow = false;
 
@@ -2475,9 +2477,9 @@ function initSoundSettings() {
                     return;
                 }
 
-                if (qty > 1) {
+                if (remainingQty > 0) {
                     nextActiveRows.push(Object.assign({}, item, {
-                        ProductAmount: Number(item.ProductAmount || 0) - 1
+                        ProductAmount: remainingQty
                     }));
                 } else {
                     removedRow = true;
@@ -2485,13 +2487,13 @@ function initSoundSettings() {
             });
 
             state.active_rows = nextActiveRows;
-            state.stats.active_qty = Math.max(0, Number(state.stats.active_qty || 0) - 1);
-            if (removedRow || qty <= 1) {
+            state.stats.active_qty = Math.max(0, Number(state.stats.active_qty || 0) - qtyToFinish);
+            if (removedRow) {
                 state.stats.active_rows = Math.max(0, Number(state.stats.active_rows || 0) - 1);
             }
 
             const finishedItem = Object.assign({}, row, {
-                ProductAmount: 1,
+                ProductAmount: qtyToFinish,
                 FinishDateTime: new Date().toISOString().slice(0, 19).replace('T', ' '),
                 FinishStaffID: getFinishStaffId(),
                 ProcessStatus: 1
@@ -2659,7 +2661,7 @@ function initSoundSettings() {
                     updateView();
                     setTimeout(loadActiveRows, 120);
                 } else {
-                    applyCheckoutToState(clickedRow);
+                    applyCheckoutToState(clickedRow, qtyToFinish);
                     feedbackSuccess();
                     setStatusText('อัปเดตแล้ว');
                     setTimeout(loadActiveRows, 120);
