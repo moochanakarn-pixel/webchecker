@@ -2,6 +2,18 @@
 
 ---
 
+## v1.9.0 — 2026-05-18
+
+### 🐛 Bug Fixes
+- **[UI] ซ่อนรายการยกเลิก** — ไม่ดึง ProcessStatus 98 (voided) มาแสดงบนจอ KDS อีกต่อไป — ลบ CSS, rendering, และ sound tracking ที่เกี่ยวข้องออก (`api_checker.php` + `checker.php`)
+- **[UI] ลบ notice "checkout สำเร็จ"** — เอา popup แจ้งเตือนสำเร็จออกทั้ง 2 จุด (กดการ์ด + barcode) เพราะบังปุ่มกด — การ์ดหายออกจากจอเป็น feedback เพียงพอ; คง notice error และ 2-step "ยืนยันรายการแล้ว" ไว้
+
+### 📁 ไฟล์ที่เปลี่ยน
+- `checker.php` — ลบ voided CSS / rendering / sound tracking / notice checkout สำเร็จ
+- `api_checker.php` — ลบ PROCESS_STATUS_VOIDED ออกจาก fetchActiveRows() query
+
+---
+
 ## v1.8.0 — 2026-05-17
 
 ### 🆕 Features
