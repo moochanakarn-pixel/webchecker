@@ -217,17 +217,12 @@ $_ckBase = _computeCheckerBase();
         .card.checkout-soft{border-color:#ffd2a4;background:linear-gradient(180deg,#fffaf4,#fff1e4);box-shadow:0 0 0 3px rgba(255,138,31,.10)}
         .card.checkout-dark{border-color:#ffd8b0;background:linear-gradient(180deg,#fff7ed,#fff1e4);box-shadow:0 0 0 3px rgba(255,138,31,.14)}
         /* สถานะพิเศษ */
-        .card.voided{border-color:#9ca3af;background:linear-gradient(180deg,#e5e7eb,#f3f4f6);box-shadow:none;opacity:.78}
-        .card.voided .product-name{text-decoration:line-through;color:#6b7280}
-        .card.voided .table-name{color:#6b7280}
-        .card.voided .qty-badge{background:#d1d5db;border-color:#9ca3af;color:#6b7280}
         .card.moved   {border-color:#93c5fd;background:linear-gradient(180deg,#eff6ff,#f5f9ff);box-shadow:0 0 0 3px rgba(59,130,246,.12)}
         .card.combined{border-color:#a78bfa;background:linear-gradient(180deg,#f5f3ff,#faf9ff);box-shadow:0 0 0 3px rgba(139,92,246,.12)}
         .status-badge{
             display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;
             font-size:11px;font-weight:bold;margin-bottom:6px
         }
-        .status-badge.voided  {background:#6b7280;color:#fff}
         .status-badge.moved   {background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff}
         .status-badge.combined{background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff}
         .status-badge.checkout-soft{background:linear-gradient(135deg,#fff1e4,#ffe0bf);color:#a34b00;border:1px solid #ffc792}
@@ -1345,8 +1340,7 @@ $_ckBase = _computeCheckerBase();
             audioBuffer: null,
             cancelAudioBuffer: null,
             audioCtx: null,
-            lastKnownProcessIds: null,
-            lastKnownVoidedIds: null
+            lastKnownProcessIds: null
         };
 
         const _serverSoundFiles = [
@@ -1407,22 +1401,7 @@ $_ckBase = _computeCheckerBase();
             if (hasNew) playAlertSound();
         }
 
-        function checkForCancelledOrders(newRows) {
-            const voidedIds = new Set(newRows.filter(r => r.is_voided).map(r => String(r.ProcessID)));
-            if (soundSettings.lastKnownVoidedIds === null) {
-                // ครั้งแรก: บันทึกไว้แต่ไม่ดังเสียง
-                soundSettings.lastKnownVoidedIds = voidedIds;
-                return;
-            }
-            let hasNew = false;
-            voidedIds.forEach(id => {
-                if (!soundSettings.lastKnownVoidedIds.has(id)) hasNew = true;
-            });
-            soundSettings.lastKnownVoidedIds = voidedIds;
-            if (hasNew) playCancelSound();
-        }
-
-        function initSoundSettings() {
+function initSoundSettings() {
             const rawEnabled = localStorage.getItem('checker_sound_enabled');
             const enabled = rawEnabled === null ? !!soundEnabledDefault : rawEnabled === '1';
             soundSettings.enabled = enabled;
@@ -2129,7 +2108,7 @@ $_ckBase = _computeCheckerBase();
                 state.active_rows = Array.isArray(data.active_rows) ? data.active_rows : [];
                 applyFilterInfo(data.filters || {});
                 checkForNewOrders(state.active_rows);
-                checkForCancelledOrders(state.active_rows);
+
                 updateView();
                 setStatusText('พร้อมใช้งาน');
                 if (_pollingErrorCount > 0) { _pollingErrorCount = 0; hidePollingOfflineBanner(); }
@@ -2271,7 +2250,6 @@ $_ckBase = _computeCheckerBase();
 
             wrap.innerHTML = rows.map(function(row) {
                 const waitMinutes = getMinutesDiff(row.SubmitOrderDateTime);
-                const isVoided   = !!row.is_voided;
                 const isMoved    = !!row.is_moved;
                 const isCombined = !!row.is_combined;
                 const movedTo    = row.moved_to || '';
@@ -2285,11 +2263,7 @@ $_ckBase = _computeCheckerBase();
                 let cardClass    = 'card';
                 let waitTagClass = 'tag good';
                 let qtyBadgeClass = 'qty-badge checkout-' + checkoutTone;
-                if (isVoided) {
-                    cardClass = 'card voided';
-                    waitTagClass = 'tag';
-                    qtyBadgeClass = 'qty-badge';
-                } else if (isMoved) {
+                if (isMoved) {
                     cardClass = 'card moved';
                     waitTagClass = 'tag';
                     qtyBadgeClass = 'qty-badge checkout-dark';
@@ -2311,27 +2285,14 @@ $_ckBase = _computeCheckerBase();
 
                 // badge สถานะพิเศษ
                 let statusBadge = '';
-                if (isVoided) {
-                    statusBadge = `<div class="status-badge voided">🚫 ยกเลิกแล้ว</div>`;
-                } else if (isMoved) {
+                if (isMoved) {
                     statusBadge = `<div class="status-badge moved">🔀 ย้ายไปโต๊ะ ${escapeHtml(movedTo)}</div>`;
                 } else if (isCombined) {
                     statusBadge = `<div class="status-badge combined">🔗 รวมโต๊ะแล้ว</div>`;
                 }
 
                 const actionButtons = [];
-                if (isVoided) {
-                    actionButtons.push(`
-                        <button
-                            class="btn btn-warning js-resolve-status"
-                            data-product-level-id="${Number(row.ProductLevelID || 0)}"
-                            data-process-id="${Number(row.ProcessID || 0)}"
-                            data-sub-process-id="${Number(row.SubProcessID || 0)}"
-                            data-printer-id="${Number(row.PrinterID || 0)}"
-                            ${isSubmitting ? 'disabled' : ''}
-                        >จบสถานะ</button>
-                    `);
-                } else if (!isCombined) {
+                if (!isCombined) {
                     actionButtons.push(`
                         <button
                             class="btn btn-checkout-${checkoutTone} js-checkout"
@@ -2380,12 +2341,6 @@ $_ckBase = _computeCheckerBase();
                                 <div class="field-label">ส่งเข้าเมื่อ</div>
                                 <div class="field-value">${escapeHtml(formatTime(row.SubmitOrderDateTime))}</div>
                             </div>
-                            ${isVoided ? `
-                                <div class="field is-special">
-                                    <div class="field-label">ยกเลิกเมื่อ</div>
-                                    <div class="field-value">${escapeHtml(formatTime(row.FinishDateTime))}</div>
-                                </div>
-                            ` : ''}
                         </div>
 
                         ${actionHtml}
@@ -2612,7 +2567,6 @@ $_ckBase = _computeCheckerBase();
                 } else {
                     applyCheckoutToState(clickedRow);
                     feedbackSuccess();
-                showNotice(data.message || 'checkout สำเร็จ', 'success');
                     setStatusText('อัปเดตแล้ว');
                     setTimeout(loadActiveRows, 120);
                     if (data.refresh_finished) {
@@ -2700,7 +2654,6 @@ $_ckBase = _computeCheckerBase();
                 }
 
                 clearBarcodeInput();
-                showNotice(data.message || 'checkout สำเร็จ', 'success');
                 setStatusText('อัปเดตแล้ว');
                 await loadAll();
                 focusBarcodeInput();
