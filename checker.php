@@ -242,7 +242,7 @@ $_ckBase = _computeCheckerBase();
         .product-total-hint{margin-top:6px;display:block;padding:0;background:transparent;border:none;border-radius:0;font-size:12px;font-weight:bold;color:var(--primary)}
         .parent-name-label{
             display:inline-block;margin-bottom:3px;font-size:11px;font-weight:bold;color:#fff;
-            background:linear-gradient(135deg,var(--primary),var(--primary-dark));
+            background:linear-gradient(135deg,#16a34a,#15803d);
             padding:2px 8px;border-radius:999px;letter-spacing:.3px
         }
         .product-comments-inline{margin-top:8px;display:flex;flex-direction:column;gap:6px}
