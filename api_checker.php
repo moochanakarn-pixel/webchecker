@@ -22,7 +22,7 @@ set_exception_handler(function($e) {
     while (ob_get_level()) ob_end_clean();
     http_response_code(200);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE | (defined('JSON_INVALID_UTF8_SUBSTITUTE') ? JSON_INVALID_UTF8_SUBSTITUTE : 0));
     exit;
 });
 
@@ -1216,7 +1216,7 @@ function buildStats($activeRows, $finishedRows)
     $activeCount = count($activeRows);
     $activeQty = 0;
     foreach ($activeRows as $row) {
-        $activeQty += (float)$row['ProductAmount'];
+        $activeQty += (float)($row['ProductAmount'] ?? 0);
     }
 
     return array(
@@ -2861,7 +2861,7 @@ function applyCheckoutSplit($conn, $row, $qtyToFinish, $finishStaffId, $now)
     $insertProductId = (int)$row['ProductID'];
     $insertProductName = (string)$row['ProductName'];
     $insertProductAmount = $finishQty;
-    $insertProductSetType = (int)$row['ProductSetType'];
+    $insertProductSetType = (int)($row['ProductSetType'] ?? 0);
     $insertSubmitOrderStaffId = (int)$row['SubmitOrderStaffID'];
     $insertSubmitOrderDateTime = isset($row['SubmitOrderDateTime']) && $row['SubmitOrderDateTime'] !== null ? (string)$row['SubmitOrderDateTime'] : null;
     $insertFinishStaffId = (int)$finishStaffId;
@@ -2873,7 +2873,7 @@ function applyCheckoutSplit($conn, $row, $qtyToFinish, $finishStaffId, $now)
     $insertDisplayTableName = $row['DisplayTableName'] !== null ? (string)$row['DisplayTableName'] : '';
     $insertIsMoveOrder = (int)($row['IsMoveOrder'] ?? 0);
     $insertProcessStatus = (int)PROCESS_STATUS_FINISHED;
-    $insertParentProcessId = (int)$row['ParentProcessID'];
+    $insertParentProcessId = (int)($row['ParentProcessID'] ?? 0);
     $insertSaleModeId = (int)$row['SaleModeID'];
 
     if ($hasMoveOrderInsert) {
@@ -3170,7 +3170,9 @@ function requestString($key, $default = null)
     if (!isset($_REQUEST[$key])) {
         return $default !== null ? (string)$default : '';
     }
-
+    if (is_array($_REQUEST[$key])) {
+        return $default !== null ? (string)$default : '';
+    }
     return trim((string)$_REQUEST[$key]);
 }
 
