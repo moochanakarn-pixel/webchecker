@@ -216,7 +216,9 @@ function validateSystemSettingsPayload($settings)
 function systemSettingsSnapshot()
 {
     $settingsPath = resolveKdsSettingsPath();
+    ob_start();
     $local = is_file($settingsPath) ? (require $settingsPath) : array();
+    ob_end_clean();
     if (!is_array($local)) $local = array();
     $db = getDbConfig();
     return array(
@@ -262,6 +264,17 @@ function connectWithSystemSettings($settings)
         throw new Exception('เชื่อมต่อผ่าน แต่ตั้งค่า charset ไม่สำเร็จ: ' . $error);
     }
     return $conn;
+}
+
+$_columnCache = array();
+function columnExists($conn, $table, $column)
+{
+    global $_columnCache;
+    $key = $table . '.' . $column;
+    if (isset($_columnCache[$key])) return $_columnCache[$key];
+    $res = $conn->query("SHOW COLUMNS FROM `$table` LIKE '" . $conn->real_escape_string($column) . "'");
+    $_columnCache[$key] = ($res && $res->num_rows > 0);
+    return $_columnCache[$key];
 }
 
 function lookupStaffDisplayNameByConnection($conn, $staffId)
@@ -310,7 +323,10 @@ function lookupStaffDisplayNameByConnection($conn, $staffId)
 function writeSystemSettingsFile($settings)
 {
     $settingsPath = resolveKdsSettingsPath();
+    // ครอบ ob เผื่อ settings file มี output หลุดออกมา (เช่น จาก OPcache version เก่า)
+    ob_start();
     $existing = is_file($settingsPath) ? (require $settingsPath) : array();
+    ob_end_clean();
     if (!is_array($existing)) {
         $existing = array();
     }
@@ -338,6 +354,10 @@ function writeSystemSettingsFile($settings)
     $path = resolveKdsSettingsPath();
     if (@file_put_contents($path, $content, LOCK_EX) === false) {
         throw new Exception('ไม่สามารถบันทึกไฟล์ settings.local.php ได้');
+    }
+    // ล้าง OPcache เพื่อให้ require ครั้งถัดไปอ่านไฟล์ใหม่จาก disk จริงๆ
+    if (function_exists('opcache_invalidate')) {
+        opcache_invalidate($path, true);
     }
 }
 
@@ -1209,6 +1229,8 @@ function fetchActiveRows($conn)
         ? "\n        LEFT JOIN tableno tn ON tn.TableID = opf.TableID AND tn.Deleted = 0"
         : '';
 
+    $hasMoveOrder = columnExists($conn, 'orderprocessdetailfront', 'IsMoveOrder');
+
     $activeSql = "
         SELECT
             opf.ProductLevelID,
@@ -1230,7 +1252,7 @@ function fetchActiveRows($conn)
             opf.TableID,
             opf.DisplayTableName,
             opf.ProcessStatus,
-            opf.IsMoveOrder,
+            " . ($hasMoveOrder ? 'opf.IsMoveOrder,' : '0 AS IsMoveOrder,') . "
             opf.SaleModeID,
             COALESCE(sm.SaleModeName, '-') AS SaleModeName,
             COALESCE(
@@ -2718,6 +2740,7 @@ function applyCheckoutSplit($conn, $row, $qtyToFinish, $finishStaffId, $now)
     }
     $stmt->close();
 
+    $hasMoveOrderInsert = columnExists($conn, 'orderprocessdetailfront', 'IsMoveOrder');
     $insertSql = "
         INSERT INTO orderprocessdetailfront (
             ProductLevelID,
@@ -2739,12 +2762,12 @@ function applyCheckoutSplit($conn, $row, $qtyToFinish, $finishStaffId, $now)
             OrderDate,
             TableID,
             DisplayTableName,
-            IsMoveOrder,
+            " . ($hasMoveOrderInsert ? 'IsMoveOrder,' : '') . "
             ProcessStatus,
             ParentProcessID,
             SaleModeID
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " . ($hasMoveOrderInsert ? '?, ' : '') . "?, ?, ?
         )
     ";
     $stmt = $conn->prepare($insertSql);
@@ -2771,37 +2794,36 @@ function applyCheckoutSplit($conn, $row, $qtyToFinish, $finishStaffId, $now)
     $insertOrderDate = isset($row['OrderDate']) && $row['OrderDate'] !== null ? (string)$row['OrderDate'] : null;
     $insertTableId = (int)$row['TableID'];
     $insertDisplayTableName = $row['DisplayTableName'] !== null ? (string)$row['DisplayTableName'] : '';
-    $insertIsMoveOrder = (int)$row['IsMoveOrder'];
+    $insertIsMoveOrder = (int)($row['IsMoveOrder'] ?? 0);
     $insertProcessStatus = (int)PROCESS_STATUS_FINISHED;
     $insertParentProcessId = (int)$row['ParentProcessID'];
     $insertSaleModeId = (int)$row['SaleModeID'];
 
-    $stmt->bind_param(
-        'iiiiiiissiisisiisisiiii',
-        $insertProductLevelId,
-        $insertProcessId,
-        $insertSubProcessId,
-        $insertTransactionId,
-        $insertComputerId,
-        $insertOrderDetailId,
-        $insertProductId,
-        $insertProductName,
-        $insertProductAmount,
-        $insertProductSetType,
-        $insertSubmitOrderStaffId,
-        $insertSubmitOrderDateTime,
-        $insertFinishStaffId,
-        $insertFinishDateTime,
-        $insertPrinterId,
-        $insertOrderNo,
-        $insertOrderDate,
-        $insertTableId,
-        $insertDisplayTableName,
-        $insertIsMoveOrder,
-        $insertProcessStatus,
-        $insertParentProcessId,
-        $insertSaleModeId
-    );
+    if ($hasMoveOrderInsert) {
+        $stmt->bind_param(
+            'iiiiiiissiisisiisisiiii',
+            $insertProductLevelId, $insertProcessId, $insertSubProcessId,
+            $insertTransactionId, $insertComputerId, $insertOrderDetailId,
+            $insertProductId, $insertProductName, $insertProductAmount,
+            $insertProductSetType, $insertSubmitOrderStaffId, $insertSubmitOrderDateTime,
+            $insertFinishStaffId, $insertFinishDateTime, $insertPrinterId,
+            $insertOrderNo, $insertOrderDate, $insertTableId,
+            $insertDisplayTableName, $insertIsMoveOrder,
+            $insertProcessStatus, $insertParentProcessId, $insertSaleModeId
+        );
+    } else {
+        $stmt->bind_param(
+            'iiiiiiiissiisissiiiii',
+            $insertProductLevelId, $insertProcessId, $insertSubProcessId,
+            $insertTransactionId, $insertComputerId, $insertOrderDetailId,
+            $insertProductId, $insertProductName, $insertProductAmount,
+            $insertProductSetType, $insertSubmitOrderStaffId, $insertSubmitOrderDateTime,
+            $insertFinishStaffId, $insertFinishDateTime, $insertPrinterId,
+            $insertOrderNo, $insertOrderDate, $insertTableId,
+            $insertDisplayTableName,
+            $insertProcessStatus, $insertParentProcessId, $insertSaleModeId
+        );
+    }
     $stmt->execute();
     if ($stmt->affected_rows < 1) {
         $stmt->close();
