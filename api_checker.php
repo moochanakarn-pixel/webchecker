@@ -1927,7 +1927,7 @@ function autoFinishParentIfAllChildrenDone($conn, $productLevelId, $parentProces
     ";
     $stmt = $conn->prepare($updateSql);
     if (!$stmt) return;
-    $stmt->bind_param('isiiiii', $finishStaffId, $now, $finishedStatus, $productLevelId, $parentProcessId, $printerId);
+    $stmt->bind_param('isiiii', $finishStaffId, $now, $finishedStatus, $productLevelId, $parentProcessId, $printerId);
     $stmt->execute();
     $stmt->close();
 }
