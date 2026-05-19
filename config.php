@@ -208,7 +208,21 @@ function jsonResponse($payload, $statusCode = 200)
         $body = '{"success":false,"error":"json encode error"}';
         $statusCode = 500;
     }
-    while (ob_get_level()) ob_end_clean();
+    // DEBUG: บันทึกสิ่งที่ค้างใน ob buffer ก่อน clear — ลบออกหลังหา bug เจอ
+    $__obContent = '';
+    $__obLevel = ob_get_level();
+    for ($__i = 0; $__i < $__obLevel; $__i++) {
+        $__obContent .= ob_get_contents() ?: '';
+        ob_end_clean();
+    }
+    if ($__obContent !== '') {
+        $__logLine = date('Y-m-d H:i:s') . ' | ob_level=' . $__obLevel
+            . ' | action=' . (isset($_REQUEST['action']) ? $_REQUEST['action'] : '-')
+            . ' | ob_hex=' . bin2hex(substr($__obContent, 0, 64))
+            . ' | ob_str=' . addcslashes(substr($__obContent, 0, 128), "\r\n\0")
+            . PHP_EOL;
+        @file_put_contents(__DIR__ . '/logs/ob_debug.log', $__logLine, FILE_APPEND | LOCK_EX);
+    }
     http_response_code($statusCode);
     header('Content-Type: application/json; charset=utf-8');
     echo $body;
