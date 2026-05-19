@@ -20,7 +20,7 @@ set_error_handler(function($errno, $errstr, $errfile, $errline) {
 
 set_exception_handler(function($e) {
     while (ob_get_level()) ob_end_clean();
-    http_response_code(500);
+    http_response_code(200);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
         'success' => false,
@@ -755,12 +755,12 @@ try {
     jsonResponse(array(
         'success' => false,
         'error' => 'Unknown action',
-    ), 400);
+    ), 200);
 } catch (Throwable $e) {
     jsonResponse(array(
         'success' => false,
         'error' => $e->getMessage(),
-    ), 500);
+    ), 200);
 }
 
 function listData($conn)
