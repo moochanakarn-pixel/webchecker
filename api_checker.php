@@ -1,10 +1,5 @@
 <?php
 // ── Bootstrap ────────────────────────────────────────
-// ล้าง buffer ที่อาจถูก open จาก php.ini output_buffering หรือ auto_prepend_file
-// ก่อนที่ ob_start() ของเราจะ capture เพื่อป้องกัน stray output นำหน้า JSON
-while (ob_get_level() > 0) {
-    ob_end_clean();
-}
 ob_start();
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);

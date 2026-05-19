@@ -211,10 +211,6 @@ function jsonResponse($payload, $statusCode = 200)
     while (ob_get_level()) ob_end_clean();
     http_response_code($statusCode);
     header('Content-Type: application/json; charset=utf-8');
-    // Content-Length ช่วยให้ client รู้ว่าต้องอ่านกี่ byte — ป้องกัน response ซ้ำจาก buffer ของ server
-    if (!ini_get('zlib.output_compression')) {
-        header('Content-Length: ' . strlen($body));
-    }
     echo $body;
     exit;
 }
