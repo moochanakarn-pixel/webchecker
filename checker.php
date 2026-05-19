@@ -1006,6 +1006,9 @@ $_ckBase = _computeCheckerBase();
             const input = document.getElementById('barcodeInput');
             if (!input || !barcodeCheckoutEnabled) return;
             window.requestAnimationFrame(function() {
+                // ไม่แย่ง focus ถ้า editable อื่น (เช่น staff login) กำลังใช้งานอยู่
+                var active = document.activeElement;
+                if (active && active !== input && isEditableElement(active)) return;
                 try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
                 if (selectText) {
                     try { input.select(); } catch (e) {}
