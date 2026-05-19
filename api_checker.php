@@ -1887,6 +1887,51 @@ function confirmOne($conn)
 }
 
 
+function autoFinishParentIfAllChildrenDone($conn, $productLevelId, $parentProcessId, $printerId, $finishStaffId, $now)
+{
+    $productLevelId  = (int)$productLevelId;
+    $parentProcessId = (int)$parentProcessId;
+    $printerId       = (int)$printerId;
+    if ($parentProcessId <= 0) return;
+
+    // เช็คว่ายังมีลูกที่ยัง active อยู่มั้ย
+    $checkSql = "
+        SELECT COUNT(*) AS cnt
+        FROM orderprocessdetailfront
+        WHERE ProductLevelID = ?
+          AND ParentProcessID = ?
+          AND PrinterID = ?
+          AND ProcessStatus IN (" . (int)PROCESS_STATUS_ACTIVE . ", " . (int)PROCESS_STATUS_IN_PROCESS . ")
+    ";
+    $stmt = $conn->prepare($checkSql);
+    if (!$stmt) return;
+    $stmt->bind_param('iii', $productLevelId, $parentProcessId, $printerId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $r = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    if (!$r || (int)$r['cnt'] > 0) return; // ยังมีลูก active อยู่ → ยังไม่ finish parent
+
+    // ลูกครบหมดแล้ว → auto-finish parent ทุก row ที่ยัง active
+    $finishedStatus = (int)PROCESS_STATUS_FINISHED;
+    $updateSql = "
+        UPDATE orderprocessdetailfront
+        SET FinishStaffID = ?,
+            FinishDateTime = ?,
+            ProcessStatus = ?
+        WHERE ProductLevelID = ?
+          AND ProcessID = ?
+          AND PrinterID = ?
+          AND ProcessStatus IN (" . (int)PROCESS_STATUS_ACTIVE . ", " . (int)PROCESS_STATUS_IN_PROCESS . ")
+    ";
+    $stmt = $conn->prepare($updateSql);
+    if (!$stmt) return;
+    $stmt->bind_param('isiiiii', $finishStaffId, $now, $finishedStatus, $productLevelId, $parentProcessId, $printerId);
+    $stmt->execute();
+    $stmt->close();
+}
+
 function checkoutOne($conn)
 {
     $productLevelId = requestInt('ProductLevelID');
@@ -1928,6 +1973,13 @@ function checkoutOne($conn)
 
             applyCheckoutSplit($conn, $childRow, $childQtyToFinish, $finishStaffId, $now);
         }
+
+        // ถ้า row นี้เป็นลูก → เช็คว่าลูกทุกตัวของ parent เสร็จหมดแล้วมั้ย → auto-finish parent
+        $rowParentId = (int)($row['ParentProcessID'] ?? 0);
+        if ($rowParentId > 0) {
+            autoFinishParentIfAllChildrenDone($conn, (int)$row['ProductLevelID'], $rowParentId, (int)$row['PrinterID'], $finishStaffId, $now);
+        }
+
         $conn->commit();
 
         $menuName = isset($row['ProductName']) ? (string)$row['ProductName'] : '-';
@@ -1992,6 +2044,13 @@ function checkoutBarcode($conn)
 
             applyCheckoutSplit($conn, $childRow, $childQtyToFinish, $finishStaffId, $now);
         }
+
+        // ถ้า row นี้เป็นลูก → เช็คว่าลูกทุกตัวของ parent เสร็จหมดแล้วมั้ย → auto-finish parent
+        $rowParentId = (int)($row['ParentProcessID'] ?? 0);
+        if ($rowParentId > 0) {
+            autoFinishParentIfAllChildrenDone($conn, (int)$row['ProductLevelID'], $rowParentId, (int)$row['PrinterID'], $finishStaffId, $now);
+        }
+
         $conn->commit();
 
         jsonResponse(array(
