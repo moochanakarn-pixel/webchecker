@@ -1359,14 +1359,10 @@ $_ckBase = _computeCheckerBase();
         };
 
         const _serverSoundFiles = [
-            _kdsBase + '/assets/sounds/alert.mp3?v=<?php echo defined("APP_VERSION") ? h(APP_VERSION) : "1"; ?>',
-            _kdsBase + '/assets/sounds/alert.ogg?v=<?php echo defined("APP_VERSION") ? h(APP_VERSION) : "1"; ?>',
             _kdsBase + '/assets/sounds/alert.wav?v=<?php echo defined("APP_VERSION") ? h(APP_VERSION) : "1"; ?>'
         ];
 
         const _serverCancelSoundFiles = [
-            _kdsBase + '/assets/sounds/cancel.mp3?v=<?php echo defined("APP_VERSION") ? h(APP_VERSION) : "1"; ?>',
-            _kdsBase + '/assets/sounds/cancel.ogg?v=<?php echo defined("APP_VERSION") ? h(APP_VERSION) : "1"; ?>',
             _kdsBase + '/assets/sounds/cancel.wav?v=<?php echo defined("APP_VERSION") ? h(APP_VERSION) : "1"; ?>'
         ];
 
@@ -3238,8 +3234,8 @@ function initSoundSettings() {
                 if (state.finishedDrawerOpen || activeRefreshTick % finishedRefreshEvery === 0) {
                     loadFinishedRows();
                 }
-                if (currentZoneId > 0 && activeRefreshTick % 4 === 0) {
-                    filterCardsByZone(currentZoneId);
+                if (window._kdsGetCurrentZoneId && window._kdsGetCurrentZoneId() > 0 && activeRefreshTick % 4 === 0) {
+                    window._kdsFilterCardsByZone(window._kdsGetCurrentZoneId());
                 }
             } catch (e) {
                 console.warn('auto-refresh error', e);
@@ -3466,6 +3462,10 @@ function initSoundSettings() {
                 filterCardsByZone(currentZoneId);
             }
         })();
+
+        // expose สำหรับ setInterval ใน script block หลัก
+        window._kdsGetCurrentZoneId = function() { return currentZoneId; };
+        window._kdsFilterCardsByZone = filterCardsByZone;
 
         // โหลด zones ตอนเริ่ม
         loadZones();
