@@ -2578,26 +2578,27 @@ function initSoundSettings() {
             }
         }
 
-        (function() {
-            document.getElementById('checkoutQtyMinus').addEventListener('click', function() {
+        // Checkout qty popup buttons — use event delegation so elements don't need to exist yet
+        document.addEventListener('click', function(e) {
+            var t = e.target;
+            if (t.id === 'checkoutQtyMinus' || t.closest('#checkoutQtyMinus')) {
                 if (_checkoutQtyCurrent > 1) {
                     _checkoutQtyCurrent--;
-                    document.getElementById('checkoutQtyDisplay').textContent = _checkoutQtyCurrent;
+                    var d = document.getElementById('checkoutQtyDisplay');
+                    if (d) d.textContent = _checkoutQtyCurrent;
                 }
-            });
-            document.getElementById('checkoutQtyPlus').addEventListener('click', function() {
+            } else if (t.id === 'checkoutQtyPlus' || t.closest('#checkoutQtyPlus')) {
                 if (_checkoutQtyCurrent < _checkoutQtyMax) {
                     _checkoutQtyCurrent++;
-                    document.getElementById('checkoutQtyDisplay').textContent = _checkoutQtyCurrent;
+                    var d = document.getElementById('checkoutQtyDisplay');
+                    if (d) d.textContent = _checkoutQtyCurrent;
                 }
-            });
-            document.getElementById('checkoutQtyCancelBtn').addEventListener('click', function() {
+            } else if (t.id === 'checkoutQtyCancelBtn') {
                 closeCheckoutQtyPopup(null);
-            });
-            document.getElementById('checkoutQtyConfirmBtn').addEventListener('click', function() {
+            } else if (t.id === 'checkoutQtyConfirmBtn') {
                 closeCheckoutQtyPopup(_checkoutQtyCurrent);
-            });
-        })();
+            }
+        });
 
         async function checkoutOne(productLevelId, processId, subProcessId, printerId) {
             if (isSubmitting) return;
