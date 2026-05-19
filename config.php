@@ -197,7 +197,13 @@ function h($value)
 
 function jsonResponse($payload, $statusCode = 200)
 {
-    $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    // JSON_INVALID_UTF8_SUBSTITUTE (PHP 7.2+) แทนที่ byte เสียด้วย ? แทนที่จะ return false
+    // ป้องกัน 500 เมื่อ database ส่ง Thai ที่ encode ผิด (TIS-620 / latin1)
+    $flags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+    if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+        $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+    }
+    $body = json_encode($payload, $flags);
     if ($body === false) {
         $body = '{"success":false,"error":"json encode error"}';
         $statusCode = 500;
