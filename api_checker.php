@@ -598,7 +598,8 @@ function handleTestSystemSettingsConnection()
     $settings = normalizeSystemSettingsPayload($_POST);
     $errors = validateSystemSettingsPayload($settings);
     if ($errors) {
-        jsonResponse(array('success' => false, 'error' => implode(' | ', $errors)), 422);
+        jsonResponse(array('success' => false, 'error' => implode(' | ', $errors)), 200);
+        return;
     }
 
     $staffName = '';
@@ -607,7 +608,7 @@ function handleTestSystemSettingsConnection()
         $staffName = lookupStaffDisplayNameByConnection($conn, $settings['finish_staff_id']);
         $conn->close();
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 422);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 
     jsonResponse(array(
@@ -622,7 +623,8 @@ function handleSaveSystemSettings()
     $settings = normalizeSystemSettingsPayload($_POST);
     $errors = validateSystemSettingsPayload($settings);
     if ($errors) {
-        jsonResponse(array('success' => false, 'error' => implode(' | ', $errors)), 422);
+        jsonResponse(array('success' => false, 'error' => implode(' | ', $errors)), 200);
+        return;
     }
 
     $staffName = '';
@@ -633,7 +635,8 @@ function handleSaveSystemSettings()
         writeSystemSettingsFile($settings);
         writeActivityLog('SETTINGS_SAVE', 'ComputerID:' . $settings['current_computer_id'] . ' StaffID:' . $settings['finish_staff_id'], $settings['finish_staff_id']);
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 422);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
+        return;
     }
 
     jsonResponse(array(
