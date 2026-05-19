@@ -20,18 +20,15 @@ set_error_handler(function($errno, $errstr, $errfile, $errline) {
 
 set_exception_handler(function($e) {
     while (ob_get_level()) ob_end_clean();
-    http_response_code(500);
+    http_response_code(200);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode([
-        'success' => false,
-        'error'   => $e->getMessage(),
-    ], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
     exit;
 });
 
 // เช็คไฟล์ก่อน require
 if (!file_exists(__DIR__ . '/config.php')) {
-    http_response_code(500);
+    http_response_code(200);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['success' => false, 'error' => 'config.php missing']);
     exit;
@@ -428,7 +425,7 @@ function handleLookupStaffByCode()
         $conn->close();
         jsonResponse($result);
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 }
 
@@ -457,7 +454,7 @@ function handleListTablesInZone()
         $conn->close();
         jsonResponse(array('success' => true, 'table_ids' => $tableIds));
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 }
 
@@ -483,7 +480,7 @@ function handleListShops()
         $conn->close();
         jsonResponse(array('success' => true, 'shops' => $shops));
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 }
 
@@ -507,7 +504,7 @@ function handleListSaleModes()
         $conn->close();
         jsonResponse(array('success' => true, 'sale_modes' => $modes));
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 }
 
@@ -544,7 +541,7 @@ function handleListZones()
         $conn->close();
         jsonResponse(array('success' => true, 'zones' => $zones));
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 }
 
@@ -571,7 +568,7 @@ function handleLookupComputerName()
         $name = ($row && isset($row['ComputerName'])) ? trim((string)$row['ComputerName']) : '';
         jsonResponse(array('success' => true, 'computer_name' => $name));
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 }
 
@@ -589,7 +586,7 @@ function handleLookupStaffName()
         $conn->close();
         jsonResponse(array('success' => true, 'staff_name' => $staffName));
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 }
 
@@ -598,7 +595,8 @@ function handleTestSystemSettingsConnection()
     $settings = normalizeSystemSettingsPayload($_POST);
     $errors = validateSystemSettingsPayload($settings);
     if ($errors) {
-        jsonResponse(array('success' => false, 'error' => implode(' | ', $errors)), 422);
+        jsonResponse(array('success' => false, 'error' => implode(' | ', $errors)), 200);
+        return;
     }
 
     $staffName = '';
@@ -607,7 +605,7 @@ function handleTestSystemSettingsConnection()
         $staffName = lookupStaffDisplayNameByConnection($conn, $settings['finish_staff_id']);
         $conn->close();
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 422);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 
     jsonResponse(array(
@@ -622,19 +620,36 @@ function handleSaveSystemSettings()
     $settings = normalizeSystemSettingsPayload($_POST);
     $errors = validateSystemSettingsPayload($settings);
     if ($errors) {
-        jsonResponse(array('success' => false, 'error' => implode(' | ', $errors)), 422);
+        jsonResponse(array('success' => false, 'error' => implode(' | ', $errors)), 200);
+        return;
     }
 
-    $staffName = '';
+    // ── ขั้นที่ 1: เชื่อมต่อ DB ก่อน (ตรวจสอบว่า connect ได้) ────────────────
     try {
         $conn = connectWithSystemSettings($settings);
-        $staffName = lookupStaffDisplayNameByConnection($conn, $settings['finish_staff_id']);
-        $conn->close();
+    } catch (Throwable $e) {
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
+        return;
+    }
+
+    // ── ขั้นที่ 2: บันทึก settings ก่อน (save ต้องสำเร็จก่อน) ──────────────
+    try {
         writeSystemSettingsFile($settings);
         writeActivityLog('SETTINGS_SAVE', 'ComputerID:' . $settings['current_computer_id'] . ' StaffID:' . $settings['finish_staff_id'], $settings['finish_staff_id']);
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 422);
+        $conn->close();
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
+        return;
     }
+
+    // ── ขั้นที่ 3: หา staff ใน shop นั้น (หลัง save แล้ว, fail ไม่กระทบ) ──────
+    $staffName = '';
+    try {
+        $staffName = lookupStaffDisplayNameByConnection($conn, $settings['finish_staff_id']);
+    } catch (Throwable $e) {
+        // lookup ไม่สำเร็จ ไม่ block save
+    }
+    $conn->close();
 
     jsonResponse(array(
         'success' => true,
@@ -752,12 +767,12 @@ try {
     jsonResponse(array(
         'success' => false,
         'error' => 'Unknown action',
-    ), 400);
+    ), 200);
 } catch (Throwable $e) {
     jsonResponse(array(
         'success' => false,
         'error' => $e->getMessage(),
-    ), 500);
+    ), 200);
 }
 
 function listData($conn)
@@ -1025,8 +1040,11 @@ function performJsonHttpRequest($url, $method, $payload = null)
         if ($responseBody === false) {
             throw new Exception('ติดต่อ Print Server ไม่สำเร็จ');
         }
-        global $http_response_header;
-        if (isset($http_response_header[0]) && preg_match('/\s(\d{3})\s/', $http_response_header[0], $m)) {
+        // $http_response_header ถูก deprecated ใน PHP 8.4 — ใช้ http_get_last_response_headers() แทน
+        $__resHeaders = function_exists('http_get_last_response_headers')
+            ? http_get_last_response_headers()
+            : ($http_response_header ?? []);
+        if (isset($__resHeaders[0]) && preg_match('/\s(\d{3})\s/', $__resHeaders[0], $m)) {
             $statusCode = (int)$m[1];
         }
     }
