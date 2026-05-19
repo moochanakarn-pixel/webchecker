@@ -1025,8 +1025,11 @@ function performJsonHttpRequest($url, $method, $payload = null)
         if ($responseBody === false) {
             throw new Exception('ติดต่อ Print Server ไม่สำเร็จ');
         }
-        global $http_response_header;
-        if (isset($http_response_header[0]) && preg_match('/\s(\d{3})\s/', $http_response_header[0], $m)) {
+        // $http_response_header ถูก deprecated ใน PHP 8.4 — ใช้ http_get_last_response_headers() แทน
+        $__resHeaders = function_exists('http_get_last_response_headers')
+            ? http_get_last_response_headers()
+            : ($http_response_header ?? []);
+        if (isset($__resHeaders[0]) && preg_match('/\s(\d{3})\s/', $__resHeaders[0], $m)) {
             $statusCode = (int)$m[1];
         }
     }
