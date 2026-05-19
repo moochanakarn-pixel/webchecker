@@ -216,7 +216,9 @@ function validateSystemSettingsPayload($settings)
 function systemSettingsSnapshot()
 {
     $settingsPath = resolveKdsSettingsPath();
+    ob_start();
     $local = is_file($settingsPath) ? (require $settingsPath) : array();
+    ob_end_clean();
     if (!is_array($local)) $local = array();
     $db = getDbConfig();
     return array(
@@ -321,7 +323,10 @@ function lookupStaffDisplayNameByConnection($conn, $staffId)
 function writeSystemSettingsFile($settings)
 {
     $settingsPath = resolveKdsSettingsPath();
+    // ครอบ ob เผื่อ settings file มี output หลุดออกมา (เช่น จาก OPcache version เก่า)
+    ob_start();
     $existing = is_file($settingsPath) ? (require $settingsPath) : array();
+    ob_end_clean();
     if (!is_array($existing)) {
         $existing = array();
     }
@@ -349,6 +354,10 @@ function writeSystemSettingsFile($settings)
     $path = resolveKdsSettingsPath();
     if (@file_put_contents($path, $content, LOCK_EX) === false) {
         throw new Exception('ไม่สามารถบันทึกไฟล์ settings.local.php ได้');
+    }
+    // ล้าง OPcache เพื่อให้ require ครั้งถัดไปอ่านไฟล์ใหม่จาก disk จริงๆ
+    if (function_exists('opcache_invalidate')) {
+        opcache_invalidate($path, true);
     }
 }
 

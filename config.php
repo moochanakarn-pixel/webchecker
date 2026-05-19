@@ -10,7 +10,9 @@ function loadLocalSettings()
         return array();
     }
 
+    ob_start();
     $settings = require $file;
+    ob_end_clean();
     return is_array($settings) ? $settings : array();
 }
 
@@ -195,10 +197,19 @@ function h($value)
 
 function jsonResponse($payload, $statusCode = 200)
 {
+    $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($body === false) {
+        $body = '{"success":false,"error":"json encode error"}';
+        $statusCode = 500;
+    }
     while (ob_get_level()) ob_end_clean();
     http_response_code($statusCode);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    // Content-Length ช่วยให้ client รู้ว่าต้องอ่านกี่ byte — ป้องกัน response ซ้ำจาก buffer ของ server
+    if (!ini_get('zlib.output_compression')) {
+        header('Content-Length: ' . strlen($body));
+    }
+    echo $body;
     exit;
 }
 
