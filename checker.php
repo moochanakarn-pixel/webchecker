@@ -3489,6 +3489,7 @@ function initSoundSettings() {
             nameLabel.textContent = '👤 ' + name;
             loginArea.style.display = 'none';
             loggedArea.style.display = 'flex';
+            focusBarcodeInput(); // หลัง login สำเร็จ → ส่ง focus ไปบาร์โค้ดทันที
         }
         function showLoggedOut() {
             staffIsLoggedIn = false;
