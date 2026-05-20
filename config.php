@@ -62,9 +62,9 @@ define('PROCESS_STATUS_FINISHED', 1);
 define('PROCESS_STATUS_VOIDED', 98);
 define('PROCESS_STATUS_RESOLVED', 4);
 
-// Performance filter
-define('ACTIVE_ROWS_TODAY_ONLY', true);
-define('FINISHED_ROWS_TODAY_ONLY', true);
+// Performance filter (override via settings.local.php: 'active_rows_today_only', 'finished_rows_today_only')
+define('ACTIVE_ROWS_TODAY_ONLY',   (bool)localSetting($__localSettings, 'active_rows_today_only',   true));
+define('FINISHED_ROWS_TODAY_ONLY', (bool)localSetting($__localSettings, 'finished_rows_today_only', true));
 
 // =============================
 // Secret / DB configuration
