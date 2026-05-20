@@ -14,4 +14,5 @@ return array (
   'barcode_camera_enabled' => 0,
   'kds_two_step_checkout' => 0,
   'shop_id' => 2,
+  'active_rows_today_only' => false,
 );
