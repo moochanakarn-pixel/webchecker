@@ -52,7 +52,6 @@ define('ALERT_THRESHOLD_YELLOW_DEFAULT', (int)localSetting($__localSettings, 'th
 define('ALERT_THRESHOLD_RED_DEFAULT', (int)localSetting($__localSettings, 'threshold_red', 20));
 define('SOUND_ALERT_ENABLED_DEFAULT', (bool)localSetting($__localSettings, 'sound_enabled', false));
 define('RECENT_FINISHED_LIMIT', 50);
-define('FINISHED_PREVIEW_LIMIT', 3);
 define('ENABLE_OUT_OF_STOCK_CONTROL', true);
 define('OUT_OF_STOCK_SHOW_LIMIT', 300);
 
