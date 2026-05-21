@@ -1955,7 +1955,7 @@ function confirmVoid($conn)
                    AND PrinterID = ?
                    AND ProcessStatus = " . (int)PROCESS_STATUS_VOIDED;
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param('isiii', $confirmedStatus, $now, $productLevelId, $processId, $subProcessId, $printerId);
+        $stmt->bind_param('isiiii', $confirmedStatus, $now, $productLevelId, $processId, $subProcessId, $printerId);
         $stmt->execute();
         $stmt->close();
 
@@ -1969,7 +1969,7 @@ function confirmVoid($conn)
                             AND PrinterID = ?
                             AND ProcessStatus = " . (int)PROCESS_STATUS_VOIDED;
             $cs = $conn->prepare($childSql);
-            $cs->bind_param('isiii', $confirmedStatus, $now,
+            $cs->bind_param('isiiii', $confirmedStatus, $now,
                 (int)$child['ProductLevelID'], (int)$child['ProcessID'],
                 (int)$child['SubProcessID'], (int)$child['PrinterID']);
             $cs->execute();

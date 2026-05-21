@@ -60,11 +60,15 @@ define('PROCESS_STATUS_ACTIVE', 0);
 define('PROCESS_STATUS_IN_PROCESS', 2);
 define('PROCESS_STATUS_FINISHED', 1);
 define('PROCESS_STATUS_VOIDED', 98);
+define('PROCESS_STATUS_VOID_CONFIRMED', 99);
 define('PROCESS_STATUS_RESOLVED', 4);
 
 // Performance filter (override via settings.local.php: 'active_rows_today_only', 'finished_rows_today_only')
 define('ACTIVE_ROWS_TODAY_ONLY',   (bool)localSetting($__localSettings, 'active_rows_today_only',   true));
 define('FINISHED_ROWS_TODAY_ONLY', (bool)localSetting($__localSettings, 'finished_rows_today_only', true));
+
+// Void confirm mode: false = auto (98→99 ทันที), true = manual (staff กดยืนยันเอง)
+define('VOID_CONFIRM_MODE', (bool)localSetting($__localSettings, 'void_confirm_mode', false));
 
 // =============================
 // Secret / DB configuration
