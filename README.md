@@ -2,7 +2,7 @@
 
 ระบบ Kitchen Display System (KDS) สำหรับแสดงคิวอาหารในครัว รองรับการ checkout, สแกนบาร์โค้ด และควบคุมสินค้าหมด
 
-**เวอร์ชันปัจจุบัน:** v1.10.0
+**เวอร์ชันปัจจุบัน:** v1.11.0
 
 ---
 
@@ -123,6 +123,21 @@ return [
 ---
 
 # Patch Notes
+
+## v1.11.0 — 2026-05-21
+
+### 🆕 Features
+- **[Config] `ACTIVE_ROWS_TODAY_ONLY` configurable** — ตั้งค่าได้ใน `settings.local.php` ด้วย key `active_rows_today_only` (default: `true`) — แก้ปัญหา order ไม่โชว์หลังเที่ยงคืนเมื่อ POS ใช้ business date
+- **[Config] `FINISHED_ROWS_TODAY_ONLY` configurable** — ตั้งค่าได้ใน `settings.local.php` ด้วย key `finished_rows_today_only` (default: `true`)
+- **[SET menu] DisplayFlexibleProductAtChecker** — เมื่อ `products.DisplayFlexibleProductAtChecker = 1` และ `ProductSetType = 7` จะแสดงเฉพาะ parent row บน KDS ซ่อน child ทั้งหมด (checkout parent แล้ว checkout child อัตโนมัติผ่าน `fetchLockedChildRows`) — ใช้ `columnExists()` guard รองรับ DB ที่ไม่มี column นี้
+- **[Void] Void Confirm Mode** — เพิ่มตั้งค่า `void_confirm_mode` ใน `settings.local.php`:
+  - **Auto (default):** เมื่อ KDS poll รายการ ProcessStatus=98 จะถูกอัปเดตเป็น 99 ทันทีโดยอัตโนมัติ
+  - **Manual:** รายการที่ถูกยกเลิกโชว์เป็นการ์ดสีแดงพร้อมปุ่ม "ยืนยันยกเลิก" ให้ครัวกดยืนยันเอง
+
+### ♻️ Refactoring
+- **ลบ dead code 437 บรรทัด** — `guardDuplicateScan()`, `fetchCommentsByRowKeys()`, กลุ่ม checkout print infra ที่ไม่ได้ใช้งาน (11 ฟังก์ชัน), และ `FINISHED_PREVIEW_LIMIT` constant
+
+---
 
 ## v1.10.0 — 2026-05-18
 
