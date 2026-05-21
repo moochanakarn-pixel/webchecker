@@ -245,6 +245,18 @@ $_ckBase = _computeCheckerBase();
             background:linear-gradient(135deg,#16a34a,#15803d);
             padding:2px 8px;border-radius:999px;letter-spacing:.3px
         }
+        .set-compact-badge{
+            display:inline-block;margin-top:3px;font-size:11px;font-weight:bold;color:#6d28d9;
+            background:#ede9fe;border:1px solid #c4b5fd;
+            padding:2px 8px;border-radius:999px;letter-spacing:.3px
+        }
+        .card-voided{border-color:#fca5a5;background:linear-gradient(180deg,#fff5f5,#fff0f0);opacity:.92}
+        .voided-badge{display:inline-block;margin-bottom:8px;font-size:12px;font-weight:bold;color:#b91c1c;
+            background:#fee2e2;border:1px solid #fca5a5;padding:3px 10px;border-radius:999px}
+        .btn-confirm-void{background:#dc2626;color:#fff;border:none;border-radius:12px;
+            font-size:13px;font-weight:bold;cursor:pointer;padding:0 12px;min-height:42px;width:100%}
+        .btn-confirm-void:hover{background:#b91c1c}
+        .btn-confirm-void:disabled{opacity:.5;cursor:not-allowed}
         .product-comments-inline{margin-top:8px;display:flex;flex-direction:column;gap:6px}
         .comment-inline{font-size:13px;line-height:1.4;color:#5b2c00;word-break:break-word;padding:8px 10px;border-radius:12px;border:1px solid #ffd8b0;background:#fff8f0}
         .comment-inline .label{font-weight:bold;margin-right:4px;color:#9a5200}
@@ -639,6 +651,13 @@ $_ckBase = _computeCheckerBase();
                             <div class="setting-check-sub">ใช้รหัสพนักงานด้านบนแทนการ login — เหมาะกับสถานีที่ไม่ต้องการให้เปลี่ยนพนักงาน</div>
                         </div>
                         <input type="checkbox" id="hideStaffLogin">
+                    </label>
+                    <label class="setting-check">
+                        <div>
+                            <div class="setting-check-title">ให้ครัวยืนยันรายการที่ถูกยกเลิก</div>
+                            <div class="setting-check-sub">เปิด = โชว์รายการที่ถูกยกเลิกในครัวพร้อมปุ่มยืนยัน / ปิด = ยืนยันอัตโนมัติทันที (ค่าเริ่มต้น)</div>
+                        </div>
+                        <input type="checkbox" id="voidConfirmMode">
                     </label>
                     <div class="setting-grid-2">
                         <div class="modal-row" style="margin-bottom:0">
@@ -1931,6 +1950,8 @@ function initSoundSettings() {
             state.checkoutQtyMode = Number(settings.checkout_qty_mode || 1);
             const hideStaffInput = document.getElementById('hideStaffLogin');
             if (hideStaffInput) hideStaffInput.checked = Number(settings.hide_staff_login || 0) === 1;
+            const voidConfirmInput = document.getElementById('voidConfirmMode');
+            if (voidConfirmInput) voidConfirmInput.checked = Number(settings.void_confirm_mode || 0) === 1;
             const barcodeScanVisibleInput = document.getElementById('barcodeScanVisible');
             if (barcodeScanVisibleInput) barcodeScanVisibleInput.checked = getBarcodeVisible();
             const cameraEnabledInput = document.getElementById('barcodeCameraEnabled');
@@ -1967,6 +1988,7 @@ function initSoundSettings() {
                 kds_two_step_checkout: document.getElementById('kdsTwoStepCheckout').checked ? 1 : 0,
                 out_of_stock_enabled: (document.getElementById('kdsOutOfStockEnabled') || {}).checked ? 1 : 0,
                 hide_staff_login: (document.getElementById('hideStaffLogin') || {}).checked ? 1 : 0,
+                void_confirm_mode: (document.getElementById('voidConfirmMode') || {}).checked ? 1 : 0,
                 checkout_qty_mode: Number((document.querySelector('input[name="checkoutQtyMode"]:checked') || {value: 1}).value || 1),
                 allowed_sale_mode_ids: state.saleModeChipsReady ? getFilterChipValues('saleModeFilterChips') : ((state.currentSystemSettings && state.currentSystemSettings.allowed_sale_mode_ids) || []),
                 allowed_zone_ids: state.zoneChipsReady ? getFilterChipValues('zoneFilterChips') : ((state.currentSystemSettings && state.currentSystemSettings.allowed_zone_ids) || []),
@@ -2268,6 +2290,33 @@ function initSoundSettings() {
             }
 
             wrap.innerHTML = rows.map(function(row) {
+                const isVoided   = Number(row.ProcessStatus) === 98;
+
+                // voided card — manual confirm mode เท่านั้น
+                if (isVoided) {
+                    const tableText = row.DisplayTableName || row.TableID || '-';
+                    return `
+                        <article class="card card-voided" data-table-id="${Number(row.TableID || 0)}">
+                            <div class="card-head">
+                                <div><div class="table-name">โต๊ะ ${escapeHtml(tableText)}</div></div>
+                            </div>
+                            <div class="voided-badge">❌ ถูกยกเลิก</div>
+                            <div class="product-block">
+                                <h3 class="product-name">${formatQty(row.ProductAmount)}x ${escapeHtml(row.ProductName || '-')}</h3>
+                            </div>
+                            <div class="card-actions">
+                                <button class="btn btn-confirm-void js-confirm-void"
+                                    data-product-level-id="${Number(row.ProductLevelID || 0)}"
+                                    data-process-id="${Number(row.ProcessID || 0)}"
+                                    data-sub-process-id="${Number(row.SubProcessID || 0)}"
+                                    data-printer-id="${Number(row.PrinterID || 0)}"
+                                    ${isSubmitting ? 'disabled' : ''}
+                                >ยืนยันยกเลิก</button>
+                            </div>
+                        </article>
+                    `;
+                }
+
                 const waitMinutes = getMinutesDiff(row.SubmitOrderDateTime);
                 const isMoved    = !!row.is_moved;
                 const isCombined = !!row.is_combined;
@@ -2346,6 +2395,7 @@ function initSoundSettings() {
                         <div class="product-block">
                             ${row.parent_name ? `<div class="parent-name-label">${escapeHtml(row.parent_name)}</div>` : ''}
                             <h3 class="product-name">${formatQty(row.ProductAmount)}x ${escapeHtml(row.ProductName || '-')}</h3>
+                            ${Number(row.ProductSetType) === 7 && Number(row.DisplayFlexibleAtChecker) === 1 ? '<div class="set-compact-badge">เซ็ท</div>' : ''}
                             ${totalQtyHint}
                             ${renderComments(row.comments || [], false)}
                         </div>
@@ -2771,6 +2821,36 @@ function initSoundSettings() {
             }
         }
 
+        async function confirmVoid(productLevelId, processId, subProcessId, printerId) {
+            if (isSubmitting) return;
+            isSubmitting = true;
+            try {
+                const resp = await kdsApiFetch(_kdsBase + '/api_checker.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        action: 'confirm_void',
+                        ProductLevelID: productLevelId,
+                        ProcessID: processId,
+                        SubProcessID: subProcessId,
+                        PrinterID: printerId,
+                        finish_staff_id: currentFinishStaffId(),
+                    }),
+                });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error || 'เกิดข้อผิดพลาด');
+                state.active_rows = (state.active_rows || []).filter(function(r) {
+                    return !(Number(r.ProcessID) === Number(processId) && Number(r.SubProcessID) === Number(subProcessId));
+                });
+                renderActiveRows(state.active_rows);
+                showNotice('ยืนยันยกเลิกเรียบร้อย', 'success');
+            } catch (e) {
+                showNotice(e.message || 'เกิดข้อผิดพลาด', 'error');
+            } finally {
+                isSubmitting = false;
+            }
+        }
+
         async function resolveStatus(productLevelId, processId, subProcessId, printerId) {
             if (isSubmitting) return;
             if (!staffIsLoggedIn) { showNotice('กรุณาเข้าสู่ระบบก่อน', 'error'); return; }
@@ -3074,6 +3154,17 @@ function initSoundSettings() {
                     checkoutBtn.dataset.processId,
                     checkoutBtn.dataset.subProcessId,
                     checkoutBtn.dataset.printerId
+                );
+                return;
+            }
+
+            const confirmVoidBtn = event.target.closest('.js-confirm-void');
+            if (confirmVoidBtn) {
+                confirmVoid(
+                    confirmVoidBtn.dataset.productLevelId,
+                    confirmVoidBtn.dataset.processId,
+                    confirmVoidBtn.dataset.subProcessId,
+                    confirmVoidBtn.dataset.printerId
                 );
                 return;
             }
