@@ -659,6 +659,13 @@ $_ckBase = _computeCheckerBase();
                         </div>
                         <input type="checkbox" id="voidConfirmMode">
                     </label>
+                    <label class="setting-check">
+                        <div>
+                            <div class="setting-check-title">แสดงเฉพาะออเดอร์วันนี้ (Active)</div>
+                            <div class="setting-check-sub">เปิด = กรองเฉพาะ OrderDate = วันนี้ (ค่าเริ่มต้น) / ปิด = แสดงทุกออเดอร์ที่ยังค้างอยู่ เหมาะกับร้านที่รันข้ามเที่ยงคืน</div>
+                        </div>
+                        <input type="checkbox" id="activeRowsTodayOnly">
+                    </label>
                     <div class="setting-grid-2">
                         <div class="modal-row" style="margin-bottom:0">
                             <div class="modal-swatch yellow"></div>
@@ -1952,6 +1959,8 @@ function initSoundSettings() {
             if (hideStaffInput) hideStaffInput.checked = Number(settings.hide_staff_login || 0) === 1;
             const voidConfirmInput = document.getElementById('voidConfirmMode');
             if (voidConfirmInput) voidConfirmInput.checked = Number(settings.void_confirm_mode || 0) === 1;
+            const activeRowsTodayInput = document.getElementById('activeRowsTodayOnly');
+            if (activeRowsTodayInput) activeRowsTodayInput.checked = Number(settings.active_rows_today_only ?? 1) === 1;
             const barcodeScanVisibleInput = document.getElementById('barcodeScanVisible');
             if (barcodeScanVisibleInput) barcodeScanVisibleInput.checked = getBarcodeVisible();
             const cameraEnabledInput = document.getElementById('barcodeCameraEnabled');
@@ -1989,6 +1998,7 @@ function initSoundSettings() {
                 out_of_stock_enabled: (document.getElementById('kdsOutOfStockEnabled') || {}).checked ? 1 : 0,
                 hide_staff_login: (document.getElementById('hideStaffLogin') || {}).checked ? 1 : 0,
                 void_confirm_mode: (document.getElementById('voidConfirmMode') || {}).checked ? 1 : 0,
+                active_rows_today_only: (document.getElementById('activeRowsTodayOnly') || {}).checked ? 1 : 0,
                 checkout_qty_mode: Number((document.querySelector('input[name="checkoutQtyMode"]:checked') || {value: 1}).value || 1),
                 allowed_sale_mode_ids: state.saleModeChipsReady ? getFilterChipValues('saleModeFilterChips') : ((state.currentSystemSettings && state.currentSystemSettings.allowed_sale_mode_ids) || []),
                 allowed_zone_ids: state.zoneChipsReady ? getFilterChipValues('zoneFilterChips') : ((state.currentSystemSettings && state.currentSystemSettings.allowed_zone_ids) || []),
