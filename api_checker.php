@@ -3,6 +3,8 @@
 ob_start();
 ini_set('display_errors', 0);
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
 // session ก่อน require เสมอ
 if (session_status() === PHP_SESSION_NONE) {
@@ -18,18 +20,15 @@ set_error_handler(function($errno, $errstr, $errfile, $errline) {
 
 set_exception_handler(function($e) {
     while (ob_get_level()) ob_end_clean();
-    http_response_code(500);
+    http_response_code(200);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode([
-        'success' => false,
-        'error'   => $e->getMessage(),
-    ], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE | (defined('JSON_INVALID_UTF8_SUBSTITUTE') ? JSON_INVALID_UTF8_SUBSTITUTE : 0));
     exit;
 });
 
 // เช็คไฟล์ก่อน require
 if (!file_exists(__DIR__ . '/config.php')) {
-    http_response_code(500);
+    http_response_code(200);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['success' => false, 'error' => 'config.php missing']);
     exit;
@@ -37,27 +36,88 @@ if (!file_exists(__DIR__ . '/config.php')) {
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth_check.php';
+session_write_close(); // release session file lock — ไม่มีการเขียน session หลังจุดนี้
 
 // timeout
 @set_time_limit(30);
 
-// กัน barcode scan ซ้ำฝั่ง PHP
-function guardDuplicateScan($code) {
-    if (empty($code)) return false;
-    $key     = 'last_scan_code';
-    $timeKey = 'last_scan_time';
-    if (isset($_SESSION[$key]) && $_SESSION[$key] === $code) {
-        $elapsed = time() - (int)($_SESSION[$timeKey] ?? 0);
-        if ($elapsed < 2) return true;
+// ── Activity Log ──────────────────────────────────────────────
+function kdsLogDir()
+{
+    return __DIR__ . DIRECTORY_SEPARATOR . 'logs';
+}
+
+function kdsLogPath($cid, $date = null)
+{
+    $d = $date ?: date('Y-m-d');
+    return kdsLogDir() . DIRECTORY_SEPARATOR . 'kds_cid' . (int)$cid . '_' . $d . '.log';
+}
+
+function purgeOldKdsLogs($cid)
+{
+    $dir = kdsLogDir();
+    $pattern = $dir . DIRECTORY_SEPARATOR . 'kds_cid' . (int)$cid . '_*.log';
+    $cutoff = strtotime('-7 days');
+    foreach (glob($pattern) as $file) {
+        if (filemtime($file) < $cutoff) {
+            @unlink($file);
+        }
     }
-    $_SESSION[$key]     = $code;
-    $_SESSION[$timeKey] = time();
-    return false;
+}
+
+function writeActivityLog($action, $detail, $staffId = 0)
+{
+    $cid  = getEffectiveComputerId();
+    $dir  = kdsLogDir();
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+    $line = date('Y-m-d H:i:s') . ' | ' . str_pad((string)$action, 14) . ' | CID:' . $cid . ' | Staff:' . (int)$staffId . ' | ' . $detail . PHP_EOL;
+    $path = kdsLogPath($cid);
+    @file_put_contents($path, $line, FILE_APPEND | LOCK_EX);
+    purgeOldKdsLogs($cid);
+}
+
+function handleLogActivity()
+{
+    $action   = isset($_POST['action_type']) ? strtoupper(trim((string)$_POST['action_type'])) : '';
+    $detail   = isset($_POST['detail'])      ? trim((string)$_POST['detail'])                  : '';
+    $staffId  = isset($_POST['staff_id'])    ? (int)$_POST['staff_id']                         : 0;
+    $allowed  = array('LOGIN','LOGOUT','ZONE_CHANGE','APP_START','SETTINGS_VIEW');
+    if (!in_array($action, $allowed, true)) {
+        jsonResponse(array('success' => false, 'error' => 'invalid action_type'));
+        return;
+    }
+    writeActivityLog($action, $detail, $staffId);
+    jsonResponse(array('success' => true));
 }
 
 function requestedMethod()
 {
     return isset($_SERVER['REQUEST_METHOD']) ? strtoupper((string)$_SERVER['REQUEST_METHOD']) : 'GET';
+}
+
+// ถ้า JS ส่ง kds_cid มา ให้ใช้ค่านั้น (รองรับ multi-KDS subfolder)
+function getEffectiveComputerId()
+{
+    $cid = isset($_REQUEST['kds_cid']) ? (int)$_REQUEST['kds_cid'] : 0;
+    return $cid > 0 ? $cid : (int)CURRENT_COMPUTER_ID;
+}
+
+// หาพาธของ settings.local.php ที่ถูกต้องสำหรับ KDS นั้น
+// รับ kds_sub จาก request (เช่น "KDS1") เพื่อเขียนไฟล์ถูกโฟลเดอร์
+function resolveKdsSettingsPath()
+{
+    $sub = isset($_REQUEST['kds_sub']) ? trim((string)$_REQUEST['kds_sub']) : '';
+    // validate: อนุญาตเฉพาะ alphanumeric, dash, underscore — ห้าม / และ ..
+    if ($sub !== '' && preg_match('/^[A-Za-z0-9_\-]+$/', $sub)) {
+        $candidate = __DIR__ . DIRECTORY_SEPARATOR . $sub . DIRECTORY_SEPARATOR . 'settings.local.php';
+        // ต้องมีโฟลเดอร์นั้นจริงๆ (checker.php อยู่ที่นั่น)
+        if (is_dir(__DIR__ . DIRECTORY_SEPARATOR . $sub)) {
+            return $candidate;
+        }
+    }
+    return getSettingsLocalFilePath();
 }
 
 function requestedAction()
@@ -66,11 +126,27 @@ function requestedAction()
     return preg_replace('/[^a-z0-9_]/', '', $act) ?: 'list';
 }
 
+// แปลง comma-separated string หรือ array → array ของ int ที่ > 0
+function parseIdList($value)
+{
+    if (is_array($value)) {
+        return array_values(array_unique(array_filter(array_map('intval', $value), function($v) { return $v > 0; })));
+    }
+    $str = trim((string)$value);
+    if ($str === '') return array();
+    $ids = array();
+    foreach (explode(',', $str) as $p) {
+        $id = (int)trim($p);
+        if ($id > 0) $ids[] = $id;
+    }
+    return array_values(array_unique($ids));
+}
+
 function normalizeSystemSettingsPayload($source)
 {
     return array(
         'db_host' => trim((string)($source['db_host'] ?? '')),
-        'db_port' => (int)($source['db_port'] ?? 3306),
+        'db_port' => (int)($source['db_port'] ?? 3307),
         'db_name' => trim((string)($source['db_name'] ?? '')),
         'shop_id' => (int)($source['shop_id'] ?? 0),
         'current_computer_id' => (int)($source['current_computer_id'] ?? 0),
@@ -81,6 +157,11 @@ function normalizeSystemSettingsPayload($source)
         'sound_enabled' => !empty($source['sound_enabled']) ? 1 : 0,
         'barcode_camera_enabled' => !empty($source['barcode_camera_enabled']) ? 1 : 0,
         'kds_two_step_checkout' => !empty($source['kds_two_step_checkout']) ? 1 : 0,
+        'checkout_qty_mode' => max(1, min(3, (int)($source['checkout_qty_mode'] ?? 1))),
+        'out_of_stock_enabled' => isset($source['out_of_stock_enabled']) ? (!empty($source['out_of_stock_enabled']) ? 1 : 0) : 1,
+        'allowed_sale_mode_ids' => parseIdList($source['allowed_sale_mode_ids'] ?? ''),
+        'allowed_zone_ids' => parseIdList($source['allowed_zone_ids'] ?? ''),
+        'hide_staff_login' => !empty($source['hide_staff_login']) ? 1 : 0,
     );
 }
 
@@ -90,8 +171,8 @@ function validateSystemSettingsPayload($settings)
     if ($settings['db_host'] === '') {
         $errors[] = 'กรุณากรอก DB Host / IP';
     }
-    if ($settings['db_port'] <= 0) {
-        $errors[] = 'Port ต้องมากกว่า 0';
+    if ($settings['db_port'] <= 0 || $settings['db_port'] > 65535) {
+        $errors[] = 'Port ต้องอยู่ระหว่าง 1-65535';
     }
     if ($settings['db_name'] === '') {
         $errors[] = 'กรุณากรอก Database Name';
@@ -99,8 +180,8 @@ function validateSystemSettingsPayload($settings)
     if ($settings['current_computer_id'] <= 0) {
         $errors[] = 'Computer ID ต้องมากกว่า 0';
     }
-    if ($settings['finish_staff_id'] <= 0) {
-        $errors[] = 'Finish Staff ID ต้องมากกว่า 0';
+    if ($settings['finish_staff_id'] < 0) {
+        $errors[] = 'Finish Staff ID ไม่ถูกต้อง';
     }
     if ($settings['threshold_yellow'] <= 0) {
         $errors[] = 'เวลาแจ้งเตือนสีเหลืองต้องมากกว่า 0';
@@ -116,7 +197,11 @@ function validateSystemSettingsPayload($settings)
 
 function systemSettingsSnapshot()
 {
-    $local = getLocalSettings();
+    $settingsPath = resolveKdsSettingsPath();
+    ob_start();
+    $local = is_file($settingsPath) ? (require $settingsPath) : array();
+    ob_end_clean();
+    if (!is_array($local)) $local = array();
     $db = getDbConfig();
     return array(
         'db_host' => (string)localSetting($local, 'db_host', $db['host']),
@@ -131,6 +216,11 @@ function systemSettingsSnapshot()
         'sound_enabled' => !empty(localSetting($local, 'sound_enabled', defined('SOUND_ALERT_ENABLED_DEFAULT') ? SOUND_ALERT_ENABLED_DEFAULT : false)) ? 1 : 0,
         'barcode_camera_enabled' => !empty(localSetting($local, 'barcode_camera_enabled', defined('BARCODE_CAMERA_ENABLED_DEFAULT') ? BARCODE_CAMERA_ENABLED_DEFAULT : true)) ? 1 : 0,
         'kds_two_step_checkout' => !empty(localSetting($local, 'kds_two_step_checkout', defined('KDS_TWO_STEP_CHECKOUT_DEFAULT') ? KDS_TWO_STEP_CHECKOUT_DEFAULT : false)) ? 1 : 0,
+        'checkout_qty_mode' => max(1, min(3, (int)localSetting($local, 'checkout_qty_mode', 1))),
+        'out_of_stock_enabled' => (localSetting($local, 'out_of_stock_enabled', 1) !== 0) ? 1 : 0,
+        'allowed_sale_mode_ids' => parseIdList(localSetting($local, 'allowed_sale_mode_ids', array())),
+        'allowed_zone_ids' => parseIdList(localSetting($local, 'allowed_zone_ids', array())),
+        'hide_staff_login' => !empty(localSetting($local, 'hide_staff_login', false)) ? 1 : 0,
     );
 }
 
@@ -156,6 +246,17 @@ function connectWithSystemSettings($settings)
         throw new Exception('เชื่อมต่อผ่าน แต่ตั้งค่า charset ไม่สำเร็จ: ' . $error);
     }
     return $conn;
+}
+
+$_columnCache = array();
+function columnExists($conn, $table, $column)
+{
+    global $_columnCache;
+    $key = $table . '.' . $column;
+    if (isset($_columnCache[$key])) return $_columnCache[$key];
+    $res = $conn->query("SHOW COLUMNS FROM `$table` LIKE '" . $conn->real_escape_string($column) . "'");
+    $_columnCache[$key] = ($res && $res->num_rows > 0);
+    return $_columnCache[$key];
 }
 
 function lookupStaffDisplayNameByConnection($conn, $staffId)
@@ -203,7 +304,11 @@ function lookupStaffDisplayNameByConnection($conn, $staffId)
 
 function writeSystemSettingsFile($settings)
 {
-    $existing = getLocalSettings();
+    $settingsPath = resolveKdsSettingsPath();
+    // ครอบ ob เผื่อ settings file มี output หลุดออกมา (เช่น จาก OPcache version เก่า)
+    ob_start();
+    $existing = is_file($settingsPath) ? (require $settingsPath) : array();
+    ob_end_clean();
     if (!is_array($existing)) {
         $existing = array();
     }
@@ -220,12 +325,21 @@ function writeSystemSettingsFile($settings)
         'sound_enabled' => !empty($settings['sound_enabled']) ? 1 : 0,
         'barcode_camera_enabled' => !empty($settings['barcode_camera_enabled']) ? 1 : 0,
         'kds_two_step_checkout' => !empty($settings['kds_two_step_checkout']) ? 1 : 0,
+        'checkout_qty_mode' => max(1, min(3, (int)($settings['checkout_qty_mode'] ?? 1))),
+        'out_of_stock_enabled' => isset($settings['out_of_stock_enabled']) ? (!empty($settings['out_of_stock_enabled']) ? 1 : 0) : 1,
+        'allowed_sale_mode_ids' => parseIdList($settings['allowed_sale_mode_ids'] ?? ''),
+        'allowed_zone_ids' => parseIdList($settings['allowed_zone_ids'] ?? ''),
+        'hide_staff_login' => !empty($settings['hide_staff_login']) ? 1 : 0,
     ));
 
     $content = "<?php\nreturn " . var_export($next, true) . ";\n";
-    $path = getSettingsLocalFilePath();
+    $path = resolveKdsSettingsPath();
     if (@file_put_contents($path, $content, LOCK_EX) === false) {
         throw new Exception('ไม่สามารถบันทึกไฟล์ settings.local.php ได้');
+    }
+    // ล้าง OPcache เพื่อให้ require ครั้งถัดไปอ่านไฟล์ใหม่จาก disk จริงๆ
+    if (function_exists('opcache_invalidate')) {
+        opcache_invalidate($path, true);
     }
 }
 
@@ -296,7 +410,7 @@ function handleLookupStaffByCode()
         $conn->close();
         jsonResponse($result);
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 }
 
@@ -325,7 +439,7 @@ function handleListTablesInZone()
         $conn->close();
         jsonResponse(array('success' => true, 'table_ids' => $tableIds));
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 }
 
@@ -351,7 +465,31 @@ function handleListShops()
         $conn->close();
         jsonResponse(array('success' => true, 'shops' => $shops));
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
+    }
+}
+
+function handleListSaleModes()
+{
+    try {
+        $snapshot = systemSettingsSnapshot();
+        $conn = connectWithSystemSettings($snapshot);
+        // เฉพาะ SaleMode ที่ยังไม่ถูกลบ (Deleted = 0) = เปิดใช้งานอยู่
+        $sql = "SELECT SaleModeID, SaleModeName FROM salemode WHERE Deleted = 0 ORDER BY SaleModeID ASC";
+        $result = $conn->query($sql);
+        $modes = array();
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $modes[] = array(
+                    'sale_mode_id' => (int)$row['SaleModeID'],
+                    'sale_mode_name' => (string)$row['SaleModeName'],
+                );
+            }
+        }
+        $conn->close();
+        jsonResponse(array('success' => true, 'sale_modes' => $modes));
+    } catch (Throwable $e) {
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 }
 
@@ -388,7 +526,34 @@ function handleListZones()
         $conn->close();
         jsonResponse(array('success' => true, 'zones' => $zones));
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
+    }
+}
+
+function handleLookupComputerName()
+{
+    $snapshot = systemSettingsSnapshot();
+    $computerId = isset($_REQUEST['computer_id']) ? (int)$_REQUEST['computer_id'] : 0;
+    if ($computerId <= 0) {
+        jsonResponse(array('success' => true, 'computer_name' => ''));
+        return;
+    }
+    try {
+        $conn = connectWithSystemSettings($snapshot);
+        $stmt = $conn->prepare('SELECT ComputerName FROM computername WHERE ComputerID = ? AND Deleted = 0 LIMIT 1');
+        if (!$stmt) {
+            throw new Exception('Prepare failed: ' . $conn->error);
+        }
+        $stmt->bind_param('i', $computerId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        $conn->close();
+        $name = ($row && isset($row['ComputerName'])) ? trim((string)$row['ComputerName']) : '';
+        jsonResponse(array('success' => true, 'computer_name' => $name));
+    } catch (Throwable $e) {
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 }
 
@@ -406,7 +571,7 @@ function handleLookupStaffName()
         $conn->close();
         jsonResponse(array('success' => true, 'staff_name' => $staffName));
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 500);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 }
 
@@ -415,15 +580,17 @@ function handleTestSystemSettingsConnection()
     $settings = normalizeSystemSettingsPayload($_POST);
     $errors = validateSystemSettingsPayload($settings);
     if ($errors) {
-        jsonResponse(array('success' => false, 'error' => implode(' | ', $errors)), 422);
+        jsonResponse(array('success' => false, 'error' => implode(' | ', $errors)), 200);
+        return;
     }
 
+    $staffName = '';
     try {
         $conn = connectWithSystemSettings($settings);
         $staffName = lookupStaffDisplayNameByConnection($conn, $settings['finish_staff_id']);
         $conn->close();
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 422);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
     }
 
     jsonResponse(array(
@@ -438,17 +605,36 @@ function handleSaveSystemSettings()
     $settings = normalizeSystemSettingsPayload($_POST);
     $errors = validateSystemSettingsPayload($settings);
     if ($errors) {
-        jsonResponse(array('success' => false, 'error' => implode(' | ', $errors)), 422);
+        jsonResponse(array('success' => false, 'error' => implode(' | ', $errors)), 200);
+        return;
     }
 
+    // ── ขั้นที่ 1: เชื่อมต่อ DB ก่อน (ตรวจสอบว่า connect ได้) ────────────────
     try {
         $conn = connectWithSystemSettings($settings);
-        $staffName = lookupStaffDisplayNameByConnection($conn, $settings['finish_staff_id']);
-        $conn->close();
-        writeSystemSettingsFile($settings);
     } catch (Throwable $e) {
-        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 422);
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
+        return;
     }
+
+    // ── ขั้นที่ 2: บันทึก settings ก่อน (save ต้องสำเร็จก่อน) ──────────────
+    try {
+        writeSystemSettingsFile($settings);
+        writeActivityLog('SETTINGS_SAVE', 'ComputerID:' . $settings['current_computer_id'] . ' StaffID:' . $settings['finish_staff_id'], $settings['finish_staff_id']);
+    } catch (Throwable $e) {
+        $conn->close();
+        jsonResponse(array('success' => false, 'error' => $e->getMessage()), 200);
+        return;
+    }
+
+    // ── ขั้นที่ 3: หา staff ใน shop นั้น (หลัง save แล้ว, fail ไม่กระทบ) ──────
+    $staffName = '';
+    try {
+        $staffName = lookupStaffDisplayNameByConnection($conn, $settings['finish_staff_id']);
+    } catch (Throwable $e) {
+        // lookup ไม่สำเร็จ ไม่ block save
+    }
+    $conn->close();
 
     jsonResponse(array(
         'success' => true,
@@ -465,34 +651,52 @@ try {
 
     if ($method === 'GET' && $action === 'get_system_settings') {
         handleGetSystemSettings();
+        exit;
+    }
+
+    if ($method === 'GET' && $action === 'lookup_computer_name') {
+        handleLookupComputerName();
+        exit;
     }
 
     if ($method === 'GET' && $action === 'lookup_staff_name') {
         handleLookupStaffName();
+        exit;
     }
 
     if ($method === 'GET' && $action === 'lookup_staff_by_code') {
         handleLookupStaffByCode();
+        exit;
     }
 
     if ($method === 'GET' && $action === 'list_shops') {
         handleListShops();
+        exit;
+    }
+
+    if ($method === 'GET' && $action === 'list_sale_modes') {
+        handleListSaleModes();
+        exit;
     }
 
     if ($method === 'GET' && $action === 'list_zones') {
         handleListZones();
+        exit;
     }
 
     if ($method === 'GET' && $action === 'list_tables_in_zone') {
         handleListTablesInZone();
+        exit;
     }
 
     if ($method === 'POST' && $action === 'test_system_settings_connection') {
         handleTestSystemSettingsConnection();
+        exit;
     }
 
     if ($method === 'POST' && $action === 'save_system_settings') {
         handleSaveSystemSettings();
+        exit;
     }
 
     $conn = getDbConnection();
@@ -537,6 +741,14 @@ try {
         setProductOutOfStock($conn);
     }
 
+    if ($method === 'POST' && $action === 'log_activity') {
+        handleLogActivity();
+    }
+
+    if ($method === 'POST' && $action === 'confirm_void') {
+        confirmVoid($conn);
+    }
+
     if ($method === 'GET' && ($action === 'list' || $action === '')) {
         listData($conn);
     }
@@ -544,16 +756,19 @@ try {
     jsonResponse(array(
         'success' => false,
         'error' => 'Unknown action',
-    ), 400);
+    ), 200);
 } catch (Throwable $e) {
     jsonResponse(array(
         'success' => false,
         'error' => $e->getMessage(),
-    ), 500);
+    ), 200);
 }
 
 function listData($conn)
 {
+    if (!VOID_CONFIRM_MODE) {
+        autoConfirmVoids($conn);
+    }
     $overridePrintServerUrl = requestString('print_server_url', '');
     $activeRows = fetchActiveRows($conn);
     $finishedRows = fetchFinishedRows($conn);
@@ -570,6 +785,9 @@ function listData($conn)
 
 function listActiveData($conn)
 {
+    if (!VOID_CONFIRM_MODE) {
+        autoConfirmVoids($conn);
+    }
     $overridePrintServerUrl = requestString('print_server_url', '');
     $activeRows = fetchActiveRows($conn);
 
@@ -599,7 +817,7 @@ function buildFilterInfo($conn = null, $overridePrintServerUrl = '')
 {
     $displayPrinters = array();
     if ($conn instanceof mysqli) {
-        $displayPrinters = fetchAvailablePrinters($conn, (int)CURRENT_COMPUTER_ID);
+        $displayPrinters = fetchAvailablePrinters($conn, getEffectiveComputerId());
     }
     $normalizedPrintServerUrl = normalizePrintServerBaseUrl($overridePrintServerUrl);
     $checkoutPrinters = resolveCheckoutPrinterOptions($conn, $normalizedPrintServerUrl);
@@ -627,7 +845,7 @@ function resolveCheckoutPrinterOptions($conn = null, $overridePrintServerUrl = '
     }
 
     if ($provider === 'queue' && $conn instanceof mysqli) {
-        return fetchAvailablePrinters($conn, (int)CURRENT_COMPUTER_ID);
+        return fetchAvailablePrinters($conn, getEffectiveComputerId());
     }
 
     return array();
@@ -781,7 +999,7 @@ function performJsonHttpRequest($url, $method, $payload = null)
         $headers[] = 'Content-Type: application/json; charset=utf-8';
     }
 
-    $timeout = defined('PRINT_SERVER_TIMEOUT_SECONDS') ? max(1, (int)PRINT_SERVER_TIMEOUT_SECONDS) : 4;
+    $timeout = defined('PRINT_SERVER_TIMEOUT_SECONDS') ? max(1, (int)PRINT_SERVER_TIMEOUT_SECONDS) : 2;
     $responseBody = '';
     $statusCode = 0;
 
@@ -817,8 +1035,11 @@ function performJsonHttpRequest($url, $method, $payload = null)
         if ($responseBody === false) {
             throw new Exception('ติดต่อ Print Server ไม่สำเร็จ');
         }
-        global $http_response_header;
-        if (isset($http_response_header[0]) && preg_match('/\s(\d{3})\s/', $http_response_header[0], $m)) {
+        // $http_response_header ถูก deprecated ใน PHP 8.4 — ใช้ http_get_last_response_headers() แทน
+        $__resHeaders = function_exists('http_get_last_response_headers')
+            ? http_get_last_response_headers()
+            : ($http_response_header ?? []);
+        if (isset($__resHeaders[0]) && preg_match('/\s(\d{3})\s/', $__resHeaders[0], $m)) {
             $statusCode = (int)$m[1];
         }
     }
@@ -943,12 +1164,54 @@ function appendAllowedPrinterFilter(array &$where, array $allowedPrinterIds, $al
     $where[] = $alias . '.PrinterID IN (' . implode(', ', $safeIds) . ')';
 }
 
+// โหลด filter SaleMode + Zone จาก settings.local.php ของสถานีนี้
+function getStationFilter()
+{
+    $settingsPath = resolveKdsSettingsPath();
+    $local = is_file($settingsPath) ? (require $settingsPath) : array();
+    if (!is_array($local)) $local = array();
+    return array(
+        'allowed_sale_mode_ids' => parseIdList(isset($local['allowed_sale_mode_ids']) ? $local['allowed_sale_mode_ids'] : array()),
+        'allowed_zone_ids' => parseIdList(isset($local['allowed_zone_ids']) ? $local['allowed_zone_ids'] : array()),
+    );
+}
+
+// เพิ่ม WHERE clause สำหรับ SaleMode และ Zone filter
+// logic: TableID > 0 = มีโต๊ะ → โซนตัดสิน (ผ่าน SaleMode filter เสมอ)
+//        TableID = 0  = ไม่มีโต๊ะ → SaleMode ตัดสิน
+function appendSaleModeZoneFilter(array &$where, array $saleModeIds, array $zoneIds, &$needZoneJoin)
+{
+    $hasSaleMode = !empty($saleModeIds);
+    $hasZone     = !empty($zoneIds);
+
+    if ($hasZone && $hasSaleMode) {
+        // ทั้งคู่: โต๊ะในโซน = ผ่านเสมอ, TableID=0 = กรองด้วย SaleMode
+        $needZoneJoin = true;
+        $safeZones = implode(',', array_map('intval', $zoneIds));
+        $safeModes = implode(',', array_map('intval', $saleModeIds));
+        $where[] = "(" .
+            "(opf.TableID > 0 AND tn.ZoneID IN ({$safeZones}))" .
+            " OR " .
+            "(opf.TableID = 0 AND opf.SaleModeID IN ({$safeModes}))" .
+        ")";
+    } elseif ($hasZone) {
+        // แค่ zone: TableID=0 ผ่านเสมอ
+        $needZoneJoin = true;
+        $safeZones = implode(',', array_map('intval', $zoneIds));
+        $where[] = "(opf.TableID = 0 OR tn.ZoneID IN ({$safeZones}))";
+    } elseif ($hasSaleMode) {
+        // แค่ SaleMode: กรองทุก order ไม่ว่ามีโต๊ะหรือไม่
+        $safeModes = implode(',', array_map('intval', $saleModeIds));
+        $where[] = "opf.SaleModeID IN ({$safeModes})";
+    }
+}
+
 function buildStats($activeRows, $finishedRows)
 {
     $activeCount = count($activeRows);
     $activeQty = 0;
     foreach ($activeRows as $row) {
-        $activeQty += (float)$row['ProductAmount'];
+        $activeQty += (float)($row['ProductAmount'] ?? 0);
     }
 
     return array(
@@ -960,19 +1223,27 @@ function buildStats($activeRows, $finishedRows)
 
 function fetchActiveRows($conn)
 {
-    $allowedPrinterIds = fetchAllowedPrinterIds($conn, (int)CURRENT_COMPUTER_ID);
+    $allowedPrinterIds = fetchAllowedPrinterIds($conn, getEffectiveComputerId());
+    $stationFilter = getStationFilter();
 
-    // รวม voided/deleted (98) ด้วยเพื่อแสดงสีเทา
-    $statusList = implode(', ', array(
-        (int)PROCESS_STATUS_ACTIVE,
-        (int)PROCESS_STATUS_IN_PROCESS,
-        (int)PROCESS_STATUS_VOIDED
-    ));
+    $statusList = implode(', ', VOID_CONFIRM_MODE
+        ? array((int)PROCESS_STATUS_ACTIVE, (int)PROCESS_STATUS_IN_PROCESS, (int)PROCESS_STATUS_VOIDED)
+        : array((int)PROCESS_STATUS_ACTIVE, (int)PROCESS_STATUS_IN_PROCESS)
+    );
     $where = array('opf.ProcessStatus IN (' . $statusList . ')');
     appendAllowedPrinterFilter($where, $allowedPrinterIds, 'opf');
     if (ACTIVE_ROWS_TODAY_ONLY) {
-        $where[] = 'opf.OrderDate = CURDATE()';
+        $where[] = "opf.OrderDate = '" . date('Y-m-d') . "'";
     }
+    $needZoneJoin = false;
+    appendSaleModeZoneFilter($where, $stationFilter['allowed_sale_mode_ids'], $stationFilter['allowed_zone_ids'], $needZoneJoin);
+
+    $zoneJoinSql = $needZoneJoin
+        ? "\n        LEFT JOIN tableno tn ON tn.TableID = opf.TableID AND tn.Deleted = 0"
+        : '';
+
+    $hasMoveOrder        = columnExists($conn, 'orderprocessdetailfront', 'IsMoveOrder');
+    $hasDisplayFlexible  = columnExists($conn, 'products', 'DisplayFlexibleProductAtChecker');
 
     $activeSql = "
         SELECT
@@ -995,9 +1266,12 @@ function fetchActiveRows($conn)
             opf.TableID,
             opf.DisplayTableName,
             opf.ProcessStatus,
-            opf.IsMoveOrder,
+            " . ($hasMoveOrder ? 'opf.IsMoveOrder,' : '0 AS IsMoveOrder,') . "
             opf.SaleModeID,
             COALESCE(sm.SaleModeName, '-') AS SaleModeName,
+            " . ($hasDisplayFlexible
+                ? 'COALESCE(pr.DisplayFlexibleProductAtChecker, 0) AS DisplayFlexibleAtChecker,'
+                : '0 AS DisplayFlexibleAtChecker,') . "
             COALESCE(
                 (SELECT otf2.TransactionStatusID
                  FROM ordertransactionfront otf2
@@ -1010,7 +1284,11 @@ function fetchActiveRows($conn)
         FROM orderprocessdetailfront opf
         LEFT JOIN salemode sm
             ON sm.SaleModeID = opf.SaleModeID
-           AND sm.Deleted = 0
+           AND sm.Deleted = 0" .
+        ($hasDisplayFlexible
+            ? "\n        LEFT JOIN products pr ON pr.ProductID = opf.ProductID"
+            : '') .
+        $zoneJoinSql . "
         WHERE " . implode(' AND ', $where) . "
         ORDER BY
             opf.SubmitOrderDateTime ASC,
@@ -1025,13 +1303,21 @@ function fetchActiveRows($conn)
 
 function fetchFinishedRows($conn)
 {
-    $allowedPrinterIds = fetchAllowedPrinterIds($conn, (int)CURRENT_COMPUTER_ID);
+    $allowedPrinterIds = fetchAllowedPrinterIds($conn, getEffectiveComputerId());
+    $stationFilter = getStationFilter();
 
     $where = array('opf.ProcessStatus = ' . (int)PROCESS_STATUS_FINISHED);
     appendAllowedPrinterFilter($where, $allowedPrinterIds, 'opf');
     if (FINISHED_ROWS_TODAY_ONLY) {
-        $where[] = "(opf.OrderDate = CURDATE() OR (opf.FinishDateTime >= CURDATE() AND opf.FinishDateTime < DATE_ADD(CURDATE(), INTERVAL 1 DAY)))";
+        $today = date('Y-m-d');
+        $where[] = "(opf.OrderDate = '{$today}' OR (opf.FinishDateTime >= '{$today}' AND opf.FinishDateTime < DATE_ADD('{$today}', INTERVAL 1 DAY)))";
     }
+    $needZoneJoin = false;
+    appendSaleModeZoneFilter($where, $stationFilter['allowed_sale_mode_ids'], $stationFilter['allowed_zone_ids'], $needZoneJoin);
+
+    $zoneJoinSql = $needZoneJoin
+        ? "\n        LEFT JOIN tableno tn ON tn.TableID = opf.TableID AND tn.Deleted = 0"
+        : '';
 
     $finishedSql = "
         SELECT
@@ -1060,7 +1346,7 @@ function fetchFinishedRows($conn)
         FROM orderprocessdetailfront opf
         LEFT JOIN salemode sm
             ON sm.SaleModeID = opf.SaleModeID
-           AND sm.Deleted = 0
+           AND sm.Deleted = 0" . $zoneJoinSql . "
         WHERE " . implode(' AND ', $where) . "
         ORDER BY
             opf.FinishDateTime DESC,
@@ -1171,6 +1457,9 @@ function mergeChildProcessRowsIntoParents($rows)
         if (in_array($productSetType, array(14, 15), true)) {
             // comment / เพิ่มราคา → merge เข้า comments[] ของ parent
             $rows[$parentIndex]['comments'] = appendProcessRowAsComment($rows[$parentIndex]['comments'], $row);
+            $hiddenChildren[$index] = true;
+        } elseif ((int)($parentRow['DisplayFlexibleAtChecker'] ?? 0) === 1) {
+            // DisplayFlexibleAtChecker = 1 → โชว์แค่ parent row เดียว ซ่อน children ทั้งหมด
             $hiddenChildren[$index] = true;
         } else {
             // สินค้าชุด (SETA) → การ์ดแยกพร้อม parent_name + inherit status จาก parent
@@ -1334,73 +1623,6 @@ function fetchCommentsByProcessIds($conn, $processIds)
         }
     }
     $stmt->close();
-
-    return $map;
-}
-
-function fetchCommentsByRowKeys($conn, $rowKeys)
-{
-    if (!$rowKeys) {
-        return array();
-    }
-
-    $conditions = array();
-    foreach ($rowKeys as $rowKey) {
-        $transactionId = isset($rowKey['TransactionID']) ? (int)$rowKey['TransactionID'] : 0;
-        $computerId = isset($rowKey['ComputerID']) ? (int)$rowKey['ComputerID'] : 0;
-        $orderDetailId = isset($rowKey['OrderDetailID']) ? (int)$rowKey['OrderDetailID'] : 0;
-        if ($transactionId > 0 && $computerId > 0 && $orderDetailId > 0) {
-            $conditions[] = sprintf('(c.TransactionID = %d AND c.ComputerID = %d AND c.OrderDetailID = %d)', $transactionId, $computerId, $orderDetailId);
-        }
-    }
-
-    if (!$conditions) {
-        return array();
-    }
-
-    $sql = "
-        SELECT
-            c.TransactionID,
-            c.ComputerID,
-            c.OrderDetailID,
-            c.OrderComment,
-            c.CommentAmount,
-            c.CommentSetType
-        FROM (" . getKdsAllCommentSql() . " ) c
-        WHERE (" . implode(' OR ', $conditions) . ")
-          AND c.OrderComment IS NOT NULL
-          AND c.OrderComment <> ''
-        ORDER BY
-            c.TransactionID ASC,
-            c.ComputerID ASC,
-            c.OrderDetailID ASC,
-            CASE
-                WHEN c.CommentSetType = 15 THEN 2
-                ELSE 1
-            END ASC,
-            c.OrderComment ASC
-    ";
-
-    $result = $conn->query($sql);
-    if (!$result) {
-        return array();
-    }
-
-    $map = array();
-    while ($row = $result->fetch_assoc()) {
-        $comment = normalizeCommentRow($row);
-        if (!$comment) {
-            continue;
-        }
-
-        $key = (int)$row['TransactionID'] . '|' . (int)$row['ComputerID'] . '|' . (int)$row['OrderDetailID'];
-        $dedupeKey = $comment['type'] . '|' . $comment['text'] . '|' . toDecimalString($comment['amount'], 2);
-
-        if (!isset($map[$key])) {
-            $map[$key] = array();
-        }
-        $map[$key][$dedupeKey] = $comment;
-    }
 
     return $map;
 }
@@ -1604,6 +1826,132 @@ function confirmOne($conn)
 }
 
 
+function autoConfirmVoids($conn)
+{
+    $allowedPrinterIds = fetchAllowedPrinterIds($conn, getEffectiveComputerId());
+    if (!$allowedPrinterIds) return;
+
+    $safeIds = implode(', ', array_map('intval', $allowedPrinterIds));
+    $voidedStatus    = (int)PROCESS_STATUS_VOIDED;
+    $confirmedStatus = (int)PROCESS_STATUS_VOID_CONFIRMED;
+    $now = date('Y-m-d H:i:s');
+
+    $sql = "UPDATE orderprocessdetailfront
+               SET ProcessStatus = ?, FinishDateTime = ?
+             WHERE ProcessStatus = ?
+               AND PrinterID IN ({$safeIds})";
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) return;
+    $stmt->bind_param('isi', $confirmedStatus, $now, $voidedStatus);
+    $stmt->execute();
+    $stmt->close();
+}
+
+function confirmVoid($conn)
+{
+    $productLevelId = requestInt('ProductLevelID');
+    $processId      = requestInt('ProcessID');
+    $subProcessId   = requestInt('SubProcessID');
+    $printerId      = requestInt('PrinterID');
+    $finishStaffId  = requestInt('finish_staff_id', DEFAULT_FINISH_STAFF_ID);
+
+    $conn->begin_transaction();
+    try {
+        $row = fetchLockedProcessRow($conn, $productLevelId, $processId, $subProcessId, $printerId, array(PROCESS_STATUS_VOIDED));
+        if (!$row) {
+            throw new Exception('ไม่พบรายการที่ถูกยกเลิก หรือยืนยันไปแล้ว');
+        }
+
+        $now             = date('Y-m-d H:i:s');
+        $confirmedStatus = (int)PROCESS_STATUS_VOID_CONFIRMED;
+
+        $sql = "UPDATE orderprocessdetailfront
+                   SET ProcessStatus = ?, FinishDateTime = ?
+                 WHERE ProductLevelID = ?
+                   AND ProcessID = ?
+                   AND SubProcessID = ?
+                   AND PrinterID = ?
+                   AND ProcessStatus = " . (int)PROCESS_STATUS_VOIDED;
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param('isiiii', $confirmedStatus, $now, $productLevelId, $processId, $subProcessId, $printerId);
+        $stmt->execute();
+        $stmt->close();
+
+        $childRows = fetchLockedChildRows($conn, $productLevelId, $processId, $printerId, array(PROCESS_STATUS_VOIDED));
+        foreach ($childRows as $child) {
+            $childSql = "UPDATE orderprocessdetailfront
+                            SET ProcessStatus = ?, FinishDateTime = ?
+                          WHERE ProductLevelID = ?
+                            AND ProcessID = ?
+                            AND SubProcessID = ?
+                            AND PrinterID = ?
+                            AND ProcessStatus = " . (int)PROCESS_STATUS_VOIDED;
+            $cs = $conn->prepare($childSql);
+            $cs->bind_param('isiiii', $confirmedStatus, $now,
+                (int)$child['ProductLevelID'], (int)$child['ProcessID'],
+                (int)$child['SubProcessID'], (int)$child['PrinterID']);
+            $cs->execute();
+            $cs->close();
+        }
+
+        $conn->commit();
+
+        $menuName  = isset($row['ProductName'])      ? (string)$row['ProductName']      : '-';
+        $tableName = isset($row['DisplayTableName']) ? (string)$row['DisplayTableName'] : '-';
+        writeActivityLog('CONFIRM_VOID', 'Table:' . $tableName . ' Menu:' . $menuName . ' Process:' . $processId, $finishStaffId);
+
+        jsonResponse(array('success' => true, 'message' => 'ยืนยันยกเลิกเรียบร้อย'));
+    } catch (Throwable $e) {
+        $conn->rollback();
+        throw $e;
+    }
+}
+
+function autoFinishParentIfAllChildrenDone($conn, $productLevelId, $parentProcessId, $printerId, $finishStaffId, $now)
+{
+    $productLevelId  = (int)$productLevelId;
+    $parentProcessId = (int)$parentProcessId;
+    $printerId       = (int)$printerId;
+    if ($parentProcessId <= 0) return;
+
+    // เช็คว่ายังมีลูกที่ยัง active อยู่มั้ย
+    $checkSql = "
+        SELECT COUNT(*) AS cnt
+        FROM orderprocessdetailfront
+        WHERE ProductLevelID = ?
+          AND ParentProcessID = ?
+          AND PrinterID = ?
+          AND ProcessStatus IN (" . (int)PROCESS_STATUS_ACTIVE . ", " . (int)PROCESS_STATUS_IN_PROCESS . ")
+    ";
+    $stmt = $conn->prepare($checkSql);
+    if (!$stmt) return;
+    $stmt->bind_param('iii', $productLevelId, $parentProcessId, $printerId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $r = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    if (!$r || (int)$r['cnt'] > 0) return; // ยังมีลูก active อยู่ → ยังไม่ finish parent
+
+    // ลูกครบหมดแล้ว → auto-finish parent ทุก row ที่ยัง active
+    $finishedStatus = (int)PROCESS_STATUS_FINISHED;
+    $updateSql = "
+        UPDATE orderprocessdetailfront
+        SET FinishStaffID = ?,
+            FinishDateTime = ?,
+            ProcessStatus = ?
+        WHERE ProductLevelID = ?
+          AND ProcessID = ?
+          AND PrinterID = ?
+          AND ProcessStatus IN (" . (int)PROCESS_STATUS_ACTIVE . ", " . (int)PROCESS_STATUS_IN_PROCESS . ")
+    ";
+    $stmt = $conn->prepare($updateSql);
+    if (!$stmt) return;
+    $stmt->bind_param('isiiii', $finishStaffId, $now, $finishedStatus, $productLevelId, $parentProcessId, $printerId);
+    $stmt->execute();
+    $stmt->close();
+}
+
 function checkoutOne($conn)
 {
     $productLevelId = requestInt('ProductLevelID');
@@ -1611,6 +1959,8 @@ function checkoutOne($conn)
     $subProcessId = requestInt('SubProcessID');
     $printerId = requestInt('PrinterID');
     $finishStaffId = requestInt('finish_staff_id', DEFAULT_FINISH_STAFF_ID);
+    $qtyToFinishParam = isset($_POST['qty_to_finish']) ? (float)$_POST['qty_to_finish'] : 1;
+    if ($qtyToFinishParam <= 0) $qtyToFinishParam = 1;
 
     $conn->begin_transaction();
 
@@ -1626,7 +1976,8 @@ function checkoutOne($conn)
             throw new Exception('จำนวนคงเหลือไม่ถูกต้อง');
         }
 
-        applyCheckoutSplit($conn, $row, 1, $finishStaffId, $now);
+        $qtyToFinish = min($qtyToFinishParam, $parentCurrentQty);
+        applyCheckoutSplit($conn, $row, $qtyToFinish, $finishStaffId, $now);
 
         $childRows = fetchLockedChildRows($conn, (int)$row['ProductLevelID'], (int)$row['ProcessID'], (int)$row['PrinterID'], array(PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS));
         foreach ($childRows as $childRow) {
@@ -1635,18 +1986,29 @@ function checkoutOne($conn)
                 continue;
             }
 
-            $childQtyToFinish = calculateChildCheckoutQty($parentCurrentQty, $childQty);
+            $childQtyToFinish = calculateChildCheckoutQty($parentCurrentQty, $childQty, $qtyToFinish);
             if ($childQtyToFinish <= 0) {
                 continue;
             }
 
             applyCheckoutSplit($conn, $childRow, $childQtyToFinish, $finishStaffId, $now);
         }
+
+        // ถ้า row นี้เป็นลูก → เช็คว่าลูกทุกตัวของ parent เสร็จหมดแล้วมั้ย → auto-finish parent
+        $rowParentId = (int)($row['ParentProcessID'] ?? 0);
+        if ($rowParentId > 0) {
+            autoFinishParentIfAllChildrenDone($conn, (int)$row['ProductLevelID'], $rowParentId, (int)$row['PrinterID'], $finishStaffId, $now);
+        }
+
         $conn->commit();
+
+        $menuName = isset($row['ProductName']) ? (string)$row['ProductName'] : '-';
+        $tableName = isset($row['DisplayTableName']) ? (string)$row['DisplayTableName'] : '-';
+        writeActivityLog('CHECKOUT', 'Table:' . $tableName . ' Menu:' . $menuName . ' Qty:' . $qtyToFinish . ' Process:' . $processId, $finishStaffId);
 
         jsonResponse(array(
             'success' => true,
-            'message' => 'checkout 1 รายการเรียบร้อย',
+            'message' => 'checkout ' . toDecimalString($qtyToFinish, 0) . ' รายการเรียบร้อย',
             'refresh_finished' => true,
         ));
     } catch (Throwable $e) {
@@ -1702,6 +2064,13 @@ function checkoutBarcode($conn)
 
             applyCheckoutSplit($conn, $childRow, $childQtyToFinish, $finishStaffId, $now);
         }
+
+        // ถ้า row นี้เป็นลูก → เช็คว่าลูกทุกตัวของ parent เสร็จหมดแล้วมั้ย → auto-finish parent
+        $rowParentId = (int)($row['ParentProcessID'] ?? 0);
+        if ($rowParentId > 0) {
+            autoFinishParentIfAllChildrenDone($conn, (int)$row['ProductLevelID'], $rowParentId, (int)$row['PrinterID'], $finishStaffId, $now);
+        }
+
         $conn->commit();
 
         jsonResponse(array(
@@ -1770,7 +2139,7 @@ function fetchLockedProcessRowByBarcode($conn, $processId, array $statuses)
         return null;
     }
 
-    $allowedPrinterIds = fetchAllowedPrinterIds($conn, (int)CURRENT_COMPUTER_ID);
+    $allowedPrinterIds = fetchAllowedPrinterIds($conn, getEffectiveComputerId());
     if (!$allowedPrinterIds) {
         return null;
     }
@@ -1791,7 +2160,7 @@ function fetchLockedProcessRowByBarcode($conn, $processId, array $statuses)
     );
     appendAllowedPrinterFilter($where, $allowedPrinterIds, 'opf');
     if (ACTIVE_ROWS_TODAY_ONLY) {
-        $where[] = 'opf.OrderDate = CURDATE()';
+        $where[] = "opf.OrderDate = '" . date('Y-m-d') . "'";
     }
 
     $sql = "
@@ -1844,6 +2213,11 @@ function undoOne($conn)
         undoFinishedProcessRow($conn, $finishedRow);
 
         $conn->commit();
+
+        $menuName  = isset($finishedRow['ProductName'])      ? (string)$finishedRow['ProductName']      : '-';
+        $tableName = isset($finishedRow['DisplayTableName']) ? (string)$finishedRow['DisplayTableName'] : '-';
+        $undoStaff = requestInt('finish_staff_id', DEFAULT_FINISH_STAFF_ID);
+        writeActivityLog('UNDO', 'Table:' . $tableName . ' Menu:' . $menuName . ' Process:' . $processId, $undoStaff);
 
         jsonResponse(array(
             'success' => true,
@@ -1931,355 +2305,6 @@ function resolveProcessRow($conn, $row, $finishStaffId, $now)
         throw new Exception('ไม่สามารถจบสถานะรายการนี้ได้');
     }
     $stmt->close();
-}
-
-function sendCheckoutPrintToPrintServer($conn, $sourceRow, $printerName, $finishStaffId, $finishedAt, $overridePrintServerUrl = '')
-{
-    $printerName = trim((string)$printerName);
-    if ($printerName === '') {
-        throw new Exception('ยังไม่ได้เลือกเครื่องปริ๊นสำหรับ Checkout');
-    }
-
-    $printRow = decorateCheckoutPrintRow($conn, $sourceRow);
-    $payload = buildCheckoutPrintServerPayload($printRow, $printerName, $finishStaffId, $finishedAt);
-    $url = buildPrintServerEndpoint('print', $overridePrintServerUrl);
-    if ($url === '') {
-        throw new Exception('ยังไม่ได้ตั้งค่า Print Server URL');
-    }
-
-    $response = performJsonHttpRequest($url, 'POST', $payload);
-
-    return array(
-        'printer_name' => $printerName,
-        'print_server_job_id' => isset($response['job_id']) ? (string)$response['job_id'] : '',
-    );
-}
-
-function buildCheckoutPrintServerPayload($row, $printerName, $finishStaffId, $finishedAt)
-{
-    $tableName = isset($row['DisplayTableName']) && trim((string)$row['DisplayTableName']) !== ''
-        ? trim((string)$row['DisplayTableName'])
-        : 'ไม่ระบุโต๊ะ';
-    $productName = isset($row['ProductName']) && trim((string)$row['ProductName']) !== ''
-        ? trim((string)$row['ProductName'])
-        : 'รายการอาหาร';
-    $qty = '1';
-    $saleMode = isset($row['SaleModeName']) && trim((string)$row['SaleModeName']) !== ''
-        ? trim((string)$row['SaleModeName'])
-        : '-';
-    $orderNo = isset($row['OrderNo']) ? (int)$row['OrderNo'] : 0;
-    $submitTime = !empty($row['SubmitOrderDateTime']) ? strtotime((string)$row['SubmitOrderDateTime']) : false;
-    $finishedTime = strtotime((string)$finishedAt);
-
-    $lines = array();
-    $lines[] = 'CHECKOUT';
-    $lines[] = 'โต๊ะ: ' . $tableName;
-    if ($saleMode !== '-' && $saleMode !== '') {
-        $lines[] = 'ประเภท: ' . $saleMode;
-    }
-    if ($orderNo > 0) {
-        $lines[] = 'Order No: ' . $orderNo;
-    }
-    $lines[] = str_repeat('-', 32);
-    $lines[] = $productName . ' x' . $qty;
-
-    $comments = isset($row['comments']) && is_array($row['comments']) ? $row['comments'] : array();
-    foreach ($comments as $comment) {
-        $rawText = isset($comment['text']) ? trim((string)$comment['text']) : '';
-        if ($rawText === '') {
-            continue;
-        }
-        $type = isset($comment['type']) ? (int)$comment['type'] : 0;
-        $label = ($type === 15) ? 'คอมเมนต์เพิ่มราคา' : 'คอมเมนต์';
-        $lines[] = ' - ' . $label . ': ' . $rawText;
-    }
-
-    $lines[] = str_repeat('-', 32);
-    $lines[] = 'Checkout โดย: Checker #' . (int)$finishStaffId;
-    $lines[] = 'เวลา: ' . date('d/m/Y H:i:s', $finishedTime ?: time());
-    if ($submitTime && $finishedTime && $finishedTime > $submitTime) {
-        $lines[] = 'เวลารอ: ' . max(0, floor(($finishedTime - $submitTime) / 60)) . ' นาที';
-    }
-
-    return array(
-        'printer_name' => $printerName,
-        'title' => 'Checkout ' . $tableName,
-        'content' => implode("\n", $lines),
-        'meta' => array(
-            'table_name' => $tableName,
-            'product_name' => $productName,
-            'process_id' => isset($row['ProcessID']) ? (int)$row['ProcessID'] : 0,
-            'sub_process_id' => isset($row['SubProcessID']) ? (int)$row['SubProcessID'] : 0,
-            'source' => 'web_checker',
-            'finished_at' => $finishedAt,
-        ),
-    );
-}
-
-function enqueueCheckoutPrintJob($conn, $sourceRow, $checkoutPrinterId, $finishStaffId, $finishedAt)
-{
-    $printer = findAvailablePrinterById($conn, (int)CURRENT_COMPUTER_ID, (int)$checkoutPrinterId);
-    if (!$printer) {
-        throw new Exception('ไม่สามารถพิมพ์ไปยังเครื่องปริ๊นที่เลือกได้');
-    }
-
-    $queueTable = resolvePrintJobTable($conn);
-    if ($queueTable === '') {
-        throw new Exception('ไม่พบตารางคิวพิมพ์สำหรับ Checkout');
-    }
-
-    $printRow = decorateCheckoutPrintRow($conn, $sourceRow);
-
-    $transactionId = isset($printRow['TransactionID']) ? (int)$printRow['TransactionID'] : 0;
-    $computerId = isset($printRow['ComputerID']) ? (int)$printRow['ComputerID'] : 0;
-    $orderDetailId = isset($printRow['OrderDetailID']) ? (int)$printRow['OrderDetailID'] : 0;
-    $processId = isset($printRow['ProcessID']) ? (int)$printRow['ProcessID'] : 0;
-    $kdsStep = 0;
-    $kdsId = 0;
-    $printNo = findNextCheckoutPrintNo($conn, $queueTable, $transactionId, $computerId, $orderDetailId, $processId, $kdsStep, $kdsId);
-
-    $saleModeId = isset($printRow['SaleModeID']) ? (int)$printRow['SaleModeID'] : 0;
-    $saleModeName = isset($printRow['SaleModeName']) ? trim((string)$printRow['SaleModeName']) : '-';
-    $productName = isset($printRow['ProductName']) ? trim((string)$printRow['ProductName']) : 'รายการอาหาร';
-    $productHeader = buildCheckoutPrintHeader($printRow);
-    $productComment = buildCheckoutPrintComment($printRow);
-    $productSetType = isset($printRow['ProductSetType']) ? (int)$printRow['ProductSetType'] : 0;
-    $orderLinkId = isset($printRow['ParentProcessID']) ? (int)$printRow['ParentProcessID'] : 0;
-    $amount = '1.0000';
-    $kdsDate = date('Y-m-d', strtotime($finishedAt));
-    $submitTime = !empty($printRow['SubmitOrderDateTime']) ? (string)$printRow['SubmitOrderDateTime'] : $finishedAt;
-    $processMinute = calculateProcessMinutes($submitTime, $finishedAt);
-    $displayTableName = isset($printRow['DisplayTableName']) ? trim((string)$printRow['DisplayTableName']) : '';
-    $seatNo = '';
-    $printKdsOrderNo = isset($printRow['OrderNo']) ? (int)$printRow['OrderNo'] : 0;
-    $kdsStatus = 2;
-    $printStaffName = 'Checker #' . (int)$finishStaffId;
-    $printerId = (int)$printer['printer_id'];
-    $printerName = isset($printer['printer_name']) ? (string)$printer['printer_name'] : ('Printer #' . $printerId);
-    $printerProperty = isset($printer['printer_device_name']) ? (string)$printer['printer_device_name'] : '';
-    $jobOrderFromComputerId = (int)CURRENT_COMPUTER_ID;
-    $jobOrderStatus = 0;
-
-    $sql = "
-        INSERT INTO `" . $queueTable . "` (
-            TransactionID, ComputerID, OrderDetailID, ProcessID, KDSStep, KDSID, PrintNo,
-            IsPrintSummary, SaleMode, SaleModeName, ProductHeader, ProductName, ProductComment,
-            ProductSetType, OrderLinkID, Amount, KDSDate, KDSStartTime, KDSFinishTime,
-            ProcessStartTime, ProcessFinishTime, ProcessMinute, DisplayTableName, SeatNo,
-            PrintKDSOrderNo, KDSStatus, PrintStaffName, InsertDateTime, PrintDateTime,
-            FinishPrintDateTime, PrinterID, PrinterName, PrinterProperty,
-            JobOrderFromComputerID, JobOrderStatus
-        ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?,
-            0, ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, NULL,
-            NULL, ?, ?, ?,
-            ?, ?
-        )
-    ";
-
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new Exception('Prepare failed: ' . $conn->error);
-    }
-
-    $stmt->bind_param(
-        'iiiiiiiissssiissssssissiississii',
-        $transactionId,
-        $computerId,
-        $orderDetailId,
-        $processId,
-        $kdsStep,
-        $kdsId,
-        $printNo,
-        $saleModeId,
-        $saleModeName,
-        $productHeader,
-        $productName,
-        $productComment,
-        $productSetType,
-        $orderLinkId,
-        $amount,
-        $kdsDate,
-        $submitTime,
-        $finishedAt,
-        $submitTime,
-        $finishedAt,
-        $processMinute,
-        $displayTableName,
-        $seatNo,
-        $printKdsOrderNo,
-        $kdsStatus,
-        $printStaffName,
-        $finishedAt,
-        $printerId,
-        $printerName,
-        $printerProperty,
-        $jobOrderFromComputerId,
-        $jobOrderStatus
-    );
-
-    if (!$stmt->execute()) {
-        $error = $stmt->error;
-        $stmt->close();
-        throw new Exception('สร้างคิวพิมพ์ไม่สำเร็จ: ' . $error);
-    }
-    $stmt->close();
-
-    return array(
-        'printer_id' => $printerId,
-        'printer_name' => $printerName,
-        'queue_table' => $queueTable,
-        'print_no' => $printNo,
-    );
-}
-
-function decorateCheckoutPrintRow($conn, $row)
-{
-    $rows = attachCommentsToRows($conn, array($row));
-    if ($rows && isset($rows[0]) && is_array($rows[0])) {
-        return $rows[0];
-    }
-
-    $row['comments'] = array();
-    if (!isset($row['SaleModeName'])) {
-        $row['SaleModeName'] = fetchSaleModeName($conn, isset($row['SaleModeID']) ? (int)$row['SaleModeID'] : 0);
-    }
-    return $row;
-}
-
-function fetchSaleModeName($conn, $saleModeId)
-{
-    $saleModeId = (int)$saleModeId;
-    if ($saleModeId <= 0) {
-        return '-';
-    }
-
-    $stmt = $conn->prepare("SELECT COALESCE(SaleModeName, '-') AS SaleModeName FROM salemode WHERE SaleModeID = ? LIMIT 1");
-    if (!$stmt) {
-        return '-';
-    }
-    $stmt->bind_param('i', $saleModeId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $name = '-';
-    if ($result && ($row = $result->fetch_assoc())) {
-        $name = isset($row['SaleModeName']) ? trim((string)$row['SaleModeName']) : '-';
-    }
-    $stmt->close();
-
-    return $name !== '' ? $name : '-';
-}
-
-function buildCheckoutPrintHeader($row)
-{
-    $tableName = isset($row['DisplayTableName']) ? trim((string)$row['DisplayTableName']) : '';
-    $saleModeName = isset($row['SaleModeName']) ? trim((string)$row['SaleModeName']) : '';
-    $parts = array();
-    if ($tableName !== '') {
-        $parts[] = $tableName;
-    }
-    if ($saleModeName !== '' && $saleModeName !== '-') {
-        $parts[] = $saleModeName;
-    }
-    return $parts ? implode(' · ', $parts) : 'Checkout';
-}
-
-function buildCheckoutPrintComment($row)
-{
-    $comments = array();
-    $list = isset($row['comments']) && is_array($row['comments']) ? $row['comments'] : array();
-    foreach ($list as $comment) {
-        $rawText = isset($comment['text']) ? trim((string)$comment['text']) : '';
-        if ($rawText === '') {
-            continue;
-        }
-        $type = isset($comment['type']) ? (int)$comment['type'] : 0;
-        $amount = isset($comment['amount']) ? (float)$comment['amount'] : 0;
-        $label = ($type === 15) ? 'คอมเมนต์เพิ่มราคา' : 'คอมเมนต์';
-        $suffix = ($amount > 1) ? ' x' . toDecimalString($amount, floor($amount) == $amount ? 0 : 2) : '';
-        $comments[] = $label . ': ' . $rawText . $suffix;
-    }
-
-    return implode(' | ', $comments);
-}
-
-function calculateProcessMinutes($startDateTime, $finishDateTime)
-{
-    $start = strtotime((string)$startDateTime);
-    $finish = strtotime((string)$finishDateTime);
-    if (!$start || !$finish || $finish <= $start) {
-        return 0;
-    }
-
-    return (int)max(0, floor(($finish - $start) / 60));
-}
-
-function resolvePrintJobTable($conn)
-{
-    static $resolved = null;
-    if ($resolved !== null) {
-        return $resolved;
-    }
-
-    foreach (array('kds_printjoborderdetailfront', 'kds_printjoborderdetail') as $tableName) {
-        if (tableExists($conn, $tableName)) {
-            $resolved = $tableName;
-            return $resolved;
-        }
-    }
-
-    $resolved = '';
-    return $resolved;
-}
-
-function tableExists($conn, $tableName)
-{
-    static $cache = array();
-    if (isset($cache[$tableName])) {
-        return $cache[$tableName];
-    }
-
-    $safeTable = $conn->real_escape_string((string)$tableName);
-    $sql = "SHOW TABLES LIKE '" . $safeTable . "'";
-    $result = $conn->query($sql);
-    $exists = ($result instanceof mysqli_result) && ($result->num_rows > 0);
-    if ($result instanceof mysqli_result) {
-        $result->free();
-    }
-    $cache[$tableName] = $exists;
-    return $exists;
-}
-
-function findNextCheckoutPrintNo($conn, $queueTable, $transactionId, $computerId, $orderDetailId, $processId, $kdsStep, $kdsId)
-{
-    $sql = "
-        SELECT COALESCE(MAX(PrintNo), 0) + 1 AS NextPrintNo
-        FROM `" . $queueTable . "`
-        WHERE TransactionID = ?
-          AND ComputerID = ?
-          AND OrderDetailID = ?
-          AND ProcessID = ?
-          AND KDSStep = ?
-          AND KDSID = ?
-    ";
-
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new Exception('Prepare failed: ' . $conn->error);
-    }
-    $stmt->bind_param('iiiiii', $transactionId, $computerId, $orderDetailId, $processId, $kdsStep, $kdsId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $nextPrintNo = 1;
-    if ($result && ($row = $result->fetch_assoc())) {
-        $nextPrintNo = isset($row['NextPrintNo']) ? (int)$row['NextPrintNo'] : 1;
-    }
-    $stmt->close();
-
-    return $nextPrintNo > 0 ? $nextPrintNo : 1;
 }
 
 function fetchLockedProcessRow($conn, $productLevelId, $processId, $subProcessId, $printerId, $statuses)
@@ -2375,28 +2400,19 @@ function fetchLockedFinishedChildRowsForUndo($conn, $finishedParentRow)
     return $rows;
 }
 
-function calculateChildCheckoutQty($parentQty, $childQty)
+function calculateChildCheckoutQty($parentQty, $childQty, $qtyFinishing = 1)
 {
-    $parentQty = (float)$parentQty;
-    $childQty = (float)$childQty;
+    $parentQty    = (float)$parentQty;
+    $childQty     = (float)$childQty;
+    $qtyFinishing = (float)$qtyFinishing;
 
-    if ($childQty <= 0) {
-        return 0;
-    }
-    if ($parentQty <= 1) {
-        return $childQty;
-    }
+    if ($childQty <= 0 || $parentQty <= 0) return 0;
+
+    if ($qtyFinishing >= $parentQty) return $childQty;
 
     $perUnit = $childQty / $parentQty;
-    if ($perUnit <= 0) {
-        return 0;
-    }
-
-    if ($perUnit > $childQty) {
-        $perUnit = $childQty;
-    }
-
-    return (float)toDecimalString($perUnit, 2);
+    $result  = $perUnit * $qtyFinishing;
+    return (float)toDecimalString(min($result, $childQty), 2);
 }
 
 function applyCheckoutSplit($conn, $row, $qtyToFinish, $finishStaffId, $now)
@@ -2467,6 +2483,7 @@ function applyCheckoutSplit($conn, $row, $qtyToFinish, $finishStaffId, $now)
     }
     $stmt->close();
 
+    $hasMoveOrderInsert = columnExists($conn, 'orderprocessdetailfront', 'IsMoveOrder');
     $insertSql = "
         INSERT INTO orderprocessdetailfront (
             ProductLevelID,
@@ -2488,12 +2505,12 @@ function applyCheckoutSplit($conn, $row, $qtyToFinish, $finishStaffId, $now)
             OrderDate,
             TableID,
             DisplayTableName,
-            IsMoveOrder,
+            " . ($hasMoveOrderInsert ? 'IsMoveOrder,' : '') . "
             ProcessStatus,
             ParentProcessID,
             SaleModeID
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " . ($hasMoveOrderInsert ? '?, ' : '') . "?, ?, ?
         )
     ";
     $stmt = $conn->prepare($insertSql);
@@ -2510,47 +2527,46 @@ function applyCheckoutSplit($conn, $row, $qtyToFinish, $finishStaffId, $now)
     $insertProductId = (int)$row['ProductID'];
     $insertProductName = (string)$row['ProductName'];
     $insertProductAmount = $finishQty;
-    $insertProductSetType = (int)$row['ProductSetType'];
+    $insertProductSetType = (int)($row['ProductSetType'] ?? 0);
     $insertSubmitOrderStaffId = (int)$row['SubmitOrderStaffID'];
-    $insertSubmitOrderDateTime = $row['SubmitOrderDateTime'] !== null ? (string)$row['SubmitOrderDateTime'] : null;
+    $insertSubmitOrderDateTime = isset($row['SubmitOrderDateTime']) && $row['SubmitOrderDateTime'] !== null ? (string)$row['SubmitOrderDateTime'] : null;
     $insertFinishStaffId = (int)$finishStaffId;
     $insertFinishDateTime = $now;
     $insertPrinterId = (int)$row['PrinterID'];
     $insertOrderNo = (int)$row['OrderNo'];
-    $insertOrderDate = $row['OrderDate'] !== null ? (string)$row['OrderDate'] : null;
+    $insertOrderDate = isset($row['OrderDate']) && $row['OrderDate'] !== null ? (string)$row['OrderDate'] : null;
     $insertTableId = (int)$row['TableID'];
     $insertDisplayTableName = $row['DisplayTableName'] !== null ? (string)$row['DisplayTableName'] : '';
-    $insertIsMoveOrder = (int)$row['IsMoveOrder'];
+    $insertIsMoveOrder = (int)($row['IsMoveOrder'] ?? 0);
     $insertProcessStatus = (int)PROCESS_STATUS_FINISHED;
-    $insertParentProcessId = (int)$row['ParentProcessID'];
+    $insertParentProcessId = (int)($row['ParentProcessID'] ?? 0);
     $insertSaleModeId = (int)$row['SaleModeID'];
 
-    $stmt->bind_param(
-        'iiiiiiissiisisiisisiiii',
-        $insertProductLevelId,
-        $insertProcessId,
-        $insertSubProcessId,
-        $insertTransactionId,
-        $insertComputerId,
-        $insertOrderDetailId,
-        $insertProductId,
-        $insertProductName,
-        $insertProductAmount,
-        $insertProductSetType,
-        $insertSubmitOrderStaffId,
-        $insertSubmitOrderDateTime,
-        $insertFinishStaffId,
-        $insertFinishDateTime,
-        $insertPrinterId,
-        $insertOrderNo,
-        $insertOrderDate,
-        $insertTableId,
-        $insertDisplayTableName,
-        $insertIsMoveOrder,
-        $insertProcessStatus,
-        $insertParentProcessId,
-        $insertSaleModeId
-    );
+    if ($hasMoveOrderInsert) {
+        $stmt->bind_param(
+            'iiiiiiissiisisiisisiiii',
+            $insertProductLevelId, $insertProcessId, $insertSubProcessId,
+            $insertTransactionId, $insertComputerId, $insertOrderDetailId,
+            $insertProductId, $insertProductName, $insertProductAmount,
+            $insertProductSetType, $insertSubmitOrderStaffId, $insertSubmitOrderDateTime,
+            $insertFinishStaffId, $insertFinishDateTime, $insertPrinterId,
+            $insertOrderNo, $insertOrderDate, $insertTableId,
+            $insertDisplayTableName, $insertIsMoveOrder,
+            $insertProcessStatus, $insertParentProcessId, $insertSaleModeId
+        );
+    } else {
+        $stmt->bind_param(
+            'iiiiiiiissiisissiiiii',
+            $insertProductLevelId, $insertProcessId, $insertSubProcessId,
+            $insertTransactionId, $insertComputerId, $insertOrderDetailId,
+            $insertProductId, $insertProductName, $insertProductAmount,
+            $insertProductSetType, $insertSubmitOrderStaffId, $insertSubmitOrderDateTime,
+            $insertFinishStaffId, $insertFinishDateTime, $insertPrinterId,
+            $insertOrderNo, $insertOrderDate, $insertTableId,
+            $insertDisplayTableName,
+            $insertProcessStatus, $insertParentProcessId, $insertSaleModeId
+        );
+    }
     $stmt->execute();
     if ($stmt->affected_rows < 1) {
         $stmt->close();
@@ -2801,6 +2817,8 @@ function setProductOutOfStock($conn)
     }
 
     $actionText = $isOutOfStock ? 'ปิดสินค้าหมดแล้ว' : 'เปิดขายสินค้าแล้ว';
+    $productName = isset($product['ProductName']) ? (string)$product['ProductName'] : '-';
+    writeActivityLog('OUT_OF_STOCK', ($isOutOfStock ? 'CLOSE' : 'OPEN') . ' ProductID:' . $productId . ' ' . $productName, $updateBy);
     jsonResponse(array(
         'success' => true,
         'message' => $actionText,
@@ -2818,7 +2836,9 @@ function requestString($key, $default = null)
     if (!isset($_REQUEST[$key])) {
         return $default !== null ? (string)$default : '';
     }
-
+    if (is_array($_REQUEST[$key])) {
+        return $default !== null ? (string)$default : '';
+    }
     return trim((string)$_REQUEST[$key]);
 }
 

@@ -5,12 +5,14 @@ if (session_status() === PHP_SESSION_NONE) { session_start(); }
 // =============================
 function loadLocalSettings()
 {
-    $file = __DIR__ . DIRECTORY_SEPARATOR . 'settings.local.php';
+    $file = getSettingsLocalFilePath();
     if (!is_file($file)) {
         return array();
     }
 
+    ob_start();
     $settings = require $file;
+    ob_end_clean();
     return is_array($settings) ? $settings : array();
 }
 
@@ -28,6 +30,7 @@ $__localSettings = loadLocalSettings();
 // App configuration
 // =============================
 define('APP_TITLE', 'Checker KDS');
+define('APP_VERSION', '1.11.0');
 define('APP_TIMEZONE', 'Asia/Bangkok');
 define('APP_REFRESH_MS', 15000);
 define('FINISHED_REFRESH_EVERY', 3);
@@ -48,8 +51,7 @@ define('KDS_TWO_STEP_CHECKOUT_DEFAULT', (bool)localSetting($__localSettings, 'kd
 define('ALERT_THRESHOLD_YELLOW_DEFAULT', (int)localSetting($__localSettings, 'threshold_yellow', 10));
 define('ALERT_THRESHOLD_RED_DEFAULT', (int)localSetting($__localSettings, 'threshold_red', 20));
 define('SOUND_ALERT_ENABLED_DEFAULT', (bool)localSetting($__localSettings, 'sound_enabled', false));
-define('RECENT_FINISHED_LIMIT', 0); // 0 = ไม่จำกัด
-define('FINISHED_PREVIEW_LIMIT', 3);
+define('RECENT_FINISHED_LIMIT', 50);
 define('ENABLE_OUT_OF_STOCK_CONTROL', true);
 define('OUT_OF_STOCK_SHOW_LIMIT', 300);
 
@@ -57,11 +59,15 @@ define('PROCESS_STATUS_ACTIVE', 0);
 define('PROCESS_STATUS_IN_PROCESS', 2);
 define('PROCESS_STATUS_FINISHED', 1);
 define('PROCESS_STATUS_VOIDED', 98);
+define('PROCESS_STATUS_VOID_CONFIRMED', 99);
 define('PROCESS_STATUS_RESOLVED', 4);
 
-// Performance filter
-define('ACTIVE_ROWS_TODAY_ONLY', false);
-define('FINISHED_ROWS_TODAY_ONLY', false);
+// Performance filter (override via settings.local.php: 'active_rows_today_only', 'finished_rows_today_only')
+define('ACTIVE_ROWS_TODAY_ONLY',   (bool)localSetting($__localSettings, 'active_rows_today_only',   true));
+define('FINISHED_ROWS_TODAY_ONLY', (bool)localSetting($__localSettings, 'finished_rows_today_only', true));
+
+// Void confirm mode: false = auto (98→99 ทันที), true = manual (staff กดยืนยันเอง)
+define('VOID_CONFIRM_MODE', (bool)localSetting($__localSettings, 'void_confirm_mode', false));
 
 // =============================
 // Secret / DB configuration
@@ -100,6 +106,15 @@ function getMachineDisplayName()
 
 function getSettingsLocalFilePath()
 {
+    // โหลด settings จาก folder ที่เรียก script (รองรับ KDS subfolders)
+    $scriptFile = isset($_SERVER['SCRIPT_FILENAME']) ? (string)$_SERVER['SCRIPT_FILENAME'] : '';
+    if ($scriptFile !== '') {
+        $scriptDir = dirname(realpath($scriptFile) ?: $scriptFile);
+        $localPath = $scriptDir . DIRECTORY_SEPARATOR . 'settings.local.php';
+        if (is_file($localPath)) {
+            return $localPath;
+        }
+    }
     return __DIR__ . DIRECTORY_SEPARATOR . 'settings.local.php';
 }
 
@@ -126,10 +141,10 @@ function getDbConfig()
 
     $local = getLocalSettings();
     $inlineConfig = array(
-        'host' => localSetting($local, 'db_host', '127.0.0.1'),
+        'host' => localSetting($local, 'db_host', ''),
         'port' => localSetting($local, 'db_port', 3307),
-        'name' => localSetting($local, 'db_name', 'ini76'),
-        'user' => localSetting($local, 'db_user', 'root'),
+        'name' => localSetting($local, 'db_name', ''),
+        'user' => localSetting($local, 'db_user', ''),
         'pass' => localSetting($local, 'db_pass', ''),
     );
 
@@ -140,7 +155,7 @@ function getDbConfig()
 function normalizeDbConfig($config)
 {
     $host = isset($config['host']) ? trim((string)$config['host']) : '';
-    $port = isset($config['port']) ? (int)$config['port'] : 3306;
+    $port = isset($config['port']) ? (int)$config['port'] : 3307;
     $name = isset($config['name']) ? trim((string)$config['name']) : '';
     $user = isset($config['user']) ? trim((string)$config['user']) : '';
     $pass = isset($config['pass']) ? (string)$config['pass'] : '';
@@ -150,7 +165,7 @@ function normalizeDbConfig($config)
     }
 
     if ($port <= 0) {
-        $port = 3306;
+        $port = 3307;
     }
 
     return array(
@@ -185,10 +200,21 @@ function h($value)
 
 function jsonResponse($payload, $statusCode = 200)
 {
+    // JSON_INVALID_UTF8_SUBSTITUTE (PHP 7.2+) แทนที่ byte เสียด้วย ? แทนที่จะ return false
+    // ป้องกัน 500 เมื่อ database ส่ง Thai ที่ encode ผิด (TIS-620 / latin1)
+    $flags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+    if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+        $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+    }
+    $body = json_encode($payload, $flags);
+    if ($body === false) {
+        $body = '{"success":false,"error":"json encode error"}';
+        $statusCode = 500;
+    }
     while (ob_get_level()) ob_end_clean();
     http_response_code($statusCode);
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo $body;
     exit;
 }
 
