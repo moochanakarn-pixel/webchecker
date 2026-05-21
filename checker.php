@@ -245,6 +245,11 @@ $_ckBase = _computeCheckerBase();
             background:linear-gradient(135deg,#16a34a,#15803d);
             padding:2px 8px;border-radius:999px;letter-spacing:.3px
         }
+        .set-compact-badge{
+            display:inline-block;margin-top:3px;font-size:11px;font-weight:bold;color:#6d28d9;
+            background:#ede9fe;border:1px solid #c4b5fd;
+            padding:2px 8px;border-radius:999px;letter-spacing:.3px
+        }
         .product-comments-inline{margin-top:8px;display:flex;flex-direction:column;gap:6px}
         .comment-inline{font-size:13px;line-height:1.4;color:#5b2c00;word-break:break-word;padding:8px 10px;border-radius:12px;border:1px solid #ffd8b0;background:#fff8f0}
         .comment-inline .label{font-weight:bold;margin-right:4px;color:#9a5200}
@@ -2346,6 +2351,7 @@ function initSoundSettings() {
                         <div class="product-block">
                             ${row.parent_name ? `<div class="parent-name-label">${escapeHtml(row.parent_name)}</div>` : ''}
                             <h3 class="product-name">${formatQty(row.ProductAmount)}x ${escapeHtml(row.ProductName || '-')}</h3>
+                            ${Number(row.ProductSetType) === 7 && Number(row.DisplayFlexibleAtChecker) === 1 ? '<div class="set-compact-badge">เซ็ท</div>' : ''}
                             ${totalQtyHint}
                             ${renderComments(row.comments || [], false)}
                         </div>

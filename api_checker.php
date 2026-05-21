@@ -1247,7 +1247,8 @@ function fetchActiveRows($conn)
         ? "\n        LEFT JOIN tableno tn ON tn.TableID = opf.TableID AND tn.Deleted = 0"
         : '';
 
-    $hasMoveOrder = columnExists($conn, 'orderprocessdetailfront', 'IsMoveOrder');
+    $hasMoveOrder        = columnExists($conn, 'orderprocessdetailfront', 'IsMoveOrder');
+    $hasDisplayFlexible  = columnExists($conn, 'products', 'DisplayFlexibleProductAtChecker');
 
     $activeSql = "
         SELECT
@@ -1273,6 +1274,9 @@ function fetchActiveRows($conn)
             " . ($hasMoveOrder ? 'opf.IsMoveOrder,' : '0 AS IsMoveOrder,') . "
             opf.SaleModeID,
             COALESCE(sm.SaleModeName, '-') AS SaleModeName,
+            " . ($hasDisplayFlexible
+                ? 'COALESCE(pr.DisplayFlexibleProductAtChecker, 0) AS DisplayFlexibleAtChecker,'
+                : '0 AS DisplayFlexibleAtChecker,') . "
             COALESCE(
                 (SELECT otf2.TransactionStatusID
                  FROM ordertransactionfront otf2
@@ -1285,7 +1289,11 @@ function fetchActiveRows($conn)
         FROM orderprocessdetailfront opf
         LEFT JOIN salemode sm
             ON sm.SaleModeID = opf.SaleModeID
-           AND sm.Deleted = 0" . $zoneJoinSql . "
+           AND sm.Deleted = 0" .
+        ($hasDisplayFlexible
+            ? "\n        LEFT JOIN products pr ON pr.ProductID = opf.ProductID"
+            : '') .
+        $zoneJoinSql . "
         WHERE " . implode(' AND ', $where) . "
         ORDER BY
             opf.SubmitOrderDateTime ASC,
@@ -1454,6 +1462,9 @@ function mergeChildProcessRowsIntoParents($rows)
         if (in_array($productSetType, array(14, 15), true)) {
             // comment / เพิ่มราคา → merge เข้า comments[] ของ parent
             $rows[$parentIndex]['comments'] = appendProcessRowAsComment($rows[$parentIndex]['comments'], $row);
+            $hiddenChildren[$index] = true;
+        } elseif ((int)($parentRow['DisplayFlexibleAtChecker'] ?? 0) === 1) {
+            // DisplayFlexibleAtChecker = 1 → โชว์แค่ parent row เดียว ซ่อน children ทั้งหมด
             $hiddenChildren[$index] = true;
         } else {
             // สินค้าชุด (SETA) → การ์ดแยกพร้อม parent_name + inherit status จาก parent
