@@ -1908,6 +1908,87 @@ function confirmOne($conn)
 }
 
 
+function autoConfirmVoids($conn)
+{
+    $allowedPrinterIds = fetchAllowedPrinterIds($conn, getEffectiveComputerId());
+    if (!$allowedPrinterIds) return;
+
+    $safeIds = implode(', ', array_map('intval', $allowedPrinterIds));
+    $voidedStatus    = (int)PROCESS_STATUS_VOIDED;
+    $confirmedStatus = (int)PROCESS_STATUS_VOID_CONFIRMED;
+    $now = date('Y-m-d H:i:s');
+
+    $sql = "UPDATE orderprocessdetailfront
+               SET ProcessStatus = ?, FinishDateTime = ?
+             WHERE ProcessStatus = ?
+               AND PrinterID IN ({$safeIds})";
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) return;
+    $stmt->bind_param('isi', $confirmedStatus, $now, $voidedStatus);
+    $stmt->execute();
+    $stmt->close();
+}
+
+function confirmVoid($conn)
+{
+    $productLevelId = requestInt('ProductLevelID');
+    $processId      = requestInt('ProcessID');
+    $subProcessId   = requestInt('SubProcessID');
+    $printerId      = requestInt('PrinterID');
+    $finishStaffId  = requestInt('finish_staff_id', DEFAULT_FINISH_STAFF_ID);
+
+    $conn->begin_transaction();
+    try {
+        $row = fetchLockedProcessRow($conn, $productLevelId, $processId, $subProcessId, $printerId, array(PROCESS_STATUS_VOIDED));
+        if (!$row) {
+            throw new Exception('ไม่พบรายการที่ถูกยกเลิก หรือยืนยันไปแล้ว');
+        }
+
+        $now             = date('Y-m-d H:i:s');
+        $confirmedStatus = (int)PROCESS_STATUS_VOID_CONFIRMED;
+
+        $sql = "UPDATE orderprocessdetailfront
+                   SET ProcessStatus = ?, FinishDateTime = ?
+                 WHERE ProductLevelID = ?
+                   AND ProcessID = ?
+                   AND SubProcessID = ?
+                   AND PrinterID = ?
+                   AND ProcessStatus = " . (int)PROCESS_STATUS_VOIDED;
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param('isiii', $confirmedStatus, $now, $productLevelId, $processId, $subProcessId, $printerId);
+        $stmt->execute();
+        $stmt->close();
+
+        $childRows = fetchLockedChildRows($conn, $productLevelId, $processId, $printerId, array(PROCESS_STATUS_VOIDED));
+        foreach ($childRows as $child) {
+            $childSql = "UPDATE orderprocessdetailfront
+                            SET ProcessStatus = ?, FinishDateTime = ?
+                          WHERE ProductLevelID = ?
+                            AND ProcessID = ?
+                            AND SubProcessID = ?
+                            AND PrinterID = ?
+                            AND ProcessStatus = " . (int)PROCESS_STATUS_VOIDED;
+            $cs = $conn->prepare($childSql);
+            $cs->bind_param('isiii', $confirmedStatus, $now,
+                (int)$child['ProductLevelID'], (int)$child['ProcessID'],
+                (int)$child['SubProcessID'], (int)$child['PrinterID']);
+            $cs->execute();
+            $cs->close();
+        }
+
+        $conn->commit();
+
+        $menuName  = isset($row['ProductName'])      ? (string)$row['ProductName']      : '-';
+        $tableName = isset($row['DisplayTableName']) ? (string)$row['DisplayTableName'] : '-';
+        writeActivityLog('CONFIRM_VOID', 'Table:' . $tableName . ' Menu:' . $menuName . ' Process:' . $processId, $finishStaffId);
+
+        jsonResponse(array('success' => true, 'message' => 'ยืนยันยกเลิกเรียบร้อย'));
+    } catch (Throwable $e) {
+        $conn->rollback();
+        throw $e;
+    }
+}
+
 function autoFinishParentIfAllChildrenDone($conn, $productLevelId, $parentProcessId, $printerId, $finishStaffId, $now)
 {
     $productLevelId  = (int)$productLevelId;
