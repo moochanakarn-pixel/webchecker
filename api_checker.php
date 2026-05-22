@@ -224,7 +224,7 @@ function systemSettingsSnapshot()
         'allowed_zone_ids' => parseIdList(localSetting($local, 'allowed_zone_ids', array())),
         'hide_staff_login' => !empty(localSetting($local, 'hide_staff_login', false)) ? 1 : 0,
         'void_confirm_mode' => !empty(localSetting($local, 'void_confirm_mode', defined('VOID_CONFIRM_MODE') ? VOID_CONFIRM_MODE : false)) ? 1 : 0,
-        'active_rows_today_only' => (localSetting($local, 'active_rows_today_only', defined('ACTIVE_ROWS_TODAY_ONLY') ? ACTIVE_ROWS_TODAY_ONLY : true) !== false) ? 1 : 0,
+        'active_rows_today_only' => !empty(localSetting($local, 'active_rows_today_only', defined('ACTIVE_ROWS_TODAY_ONLY') ? ACTIVE_ROWS_TODAY_ONLY : true)) ? 1 : 0,
     );
 }
 
