@@ -164,6 +164,7 @@ function normalizeSystemSettingsPayload($source)
         'hide_staff_login' => !empty($source['hide_staff_login']) ? 1 : 0,
         'void_confirm_mode' => !empty($source['void_confirm_mode']) ? 1 : 0,
         'active_rows_today_only' => isset($source['active_rows_today_only']) ? (!empty($source['active_rows_today_only']) ? 1 : 0) : 1,
+        'show_order_number' => !empty($source['show_order_number']) ? 1 : 0,
     );
 }
 
@@ -225,6 +226,7 @@ function systemSettingsSnapshot()
         'hide_staff_login' => !empty(localSetting($local, 'hide_staff_login', false)) ? 1 : 0,
         'void_confirm_mode' => !empty(localSetting($local, 'void_confirm_mode', defined('VOID_CONFIRM_MODE') ? VOID_CONFIRM_MODE : false)) ? 1 : 0,
         'active_rows_today_only' => !empty(localSetting($local, 'active_rows_today_only', defined('ACTIVE_ROWS_TODAY_ONLY') ? ACTIVE_ROWS_TODAY_ONLY : true)) ? 1 : 0,
+        'show_order_number' => !empty(localSetting($local, 'show_order_number', false)) ? 1 : 0,
     );
 }
 
@@ -336,6 +338,7 @@ function writeSystemSettingsFile($settings)
         'hide_staff_login' => !empty($settings['hide_staff_login']) ? 1 : 0,
         'void_confirm_mode' => !empty($settings['void_confirm_mode']) ? 1 : 0,
         'active_rows_today_only' => isset($settings['active_rows_today_only']) ? (!empty($settings['active_rows_today_only']) ? 1 : 0) : 1,
+        'show_order_number' => !empty($settings['show_order_number']) ? 1 : 0,
     ));
 
     $content = "<?php\nreturn " . var_export($next, true) . ";\n";

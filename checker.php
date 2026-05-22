@@ -229,6 +229,7 @@ $_ckBase = _computeCheckerBase();
         .status-badge.checkout-dark{background:linear-gradient(135deg,var(--secondary),#ffad59);color:#fff}
         .card-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;margin-bottom:8px}
         .table-name{font-size:20px;font-weight:bold;line-height:1.1;word-break:break-word}
+        .order-num{font-size:11px;font-weight:600;color:var(--muted);background:var(--surface-soft);border:1px solid var(--line);border-radius:6px;padding:2px 6px;white-space:nowrap;line-height:1.4;letter-spacing:.5px}
         .order-line{margin-top:3px;color:var(--muted);font-size:11px;line-height:1.4}
         .qty-badge{
             min-width:52px;min-height:52px;display:flex;align-items:center;justify-content:center;padding:6px;
@@ -666,6 +667,13 @@ $_ckBase = _computeCheckerBase();
                         </div>
                         <input type="checkbox" id="activeRowsTodayOnly">
                     </label>
+                    <label class="setting-check">
+                        <div>
+                            <div class="setting-check-title">แสดงเลขออเดอร์บนการ์ด</div>
+                            <div class="setting-check-sub">แสดงเลข Order# (ProcessID) มุมบนขวาของการ์ด — ใช้ตรวจสอบกับใบเสร็จหรือสแกนบาร์โค้ด</div>
+                        </div>
+                        <input type="checkbox" id="showOrderNumber">
+                    </label>
                     <div class="setting-grid-2">
                         <div class="modal-row" style="margin-bottom:0">
                             <div class="modal-swatch yellow"></div>
@@ -925,7 +933,8 @@ $_ckBase = _computeCheckerBase();
             soldOutProducts: [],
             soldOutKeyword: '',
             kdsTwoStepCheckout: kdsTwoStepCheckoutDefault,
-            checkoutQtyMode: 1
+            checkoutQtyMode: 1,
+            showOrderNumber: false
         };
 
         const barcodeCaptureState = {
@@ -1961,6 +1970,8 @@ function initSoundSettings() {
             if (voidConfirmInput) voidConfirmInput.checked = Number(settings.void_confirm_mode || 0) === 1;
             const activeRowsTodayInput = document.getElementById('activeRowsTodayOnly');
             if (activeRowsTodayInput) activeRowsTodayInput.checked = Number(settings.active_rows_today_only ?? 1) === 1;
+            const showOrderNumberInput = document.getElementById('showOrderNumber');
+            if (showOrderNumberInput) showOrderNumberInput.checked = Number(settings.show_order_number || 0) === 1;
             const barcodeScanVisibleInput = document.getElementById('barcodeScanVisible');
             if (barcodeScanVisibleInput) barcodeScanVisibleInput.checked = getBarcodeVisible();
             const cameraEnabledInput = document.getElementById('barcodeCameraEnabled');
@@ -1999,6 +2010,7 @@ function initSoundSettings() {
                 hide_staff_login: (document.getElementById('hideStaffLogin') || {}).checked ? 1 : 0,
                 void_confirm_mode: (document.getElementById('voidConfirmMode') || {}).checked ? 1 : 0,
                 active_rows_today_only: (document.getElementById('activeRowsTodayOnly') || {}).checked ? 1 : 0,
+                show_order_number: (document.getElementById('showOrderNumber') || {}).checked ? 1 : 0,
                 checkout_qty_mode: Number((document.querySelector('input[name="checkoutQtyMode"]:checked') || {value: 1}).value || 1),
                 allowed_sale_mode_ids: state.saleModeChipsReady ? getFilterChipValues('saleModeFilterChips') : ((state.currentSystemSettings && state.currentSystemSettings.allowed_sale_mode_ids) || []),
                 allowed_zone_ids: state.zoneChipsReady ? getFilterChipValues('zoneFilterChips') : ((state.currentSystemSettings && state.currentSystemSettings.allowed_zone_ids) || []),
@@ -2095,6 +2107,7 @@ function initSoundSettings() {
             soundSettings.enabled = !!payload.sound_enabled;
             state.kdsTwoStepCheckout = !!payload.kds_two_step_checkout;
             state.checkoutQtyMode = Number(payload.checkout_qty_mode || 1);
+            state.showOrderNumber = Number(payload.show_order_number || 0) === 1;
             applyBarcodeCameraAvailability();
             applyOutOfStockEnabled(payload.out_of_stock_enabled !== 0);
             applyStaffLoginMode(payload.hide_staff_login === 1);
@@ -2305,10 +2318,14 @@ function initSoundSettings() {
                 // voided card — manual confirm mode เท่านั้น
                 if (isVoided) {
                     const tableText = row.DisplayTableName || row.TableID || '-';
+                    const voidOrderNumHtml = state.showOrderNumber && row.ProcessID
+                        ? `<div class="order-num">#${String(Number(row.ProcessID)).padStart(6, '0')}</div>`
+                        : '';
                     return `
                         <article class="card card-voided" data-table-id="${Number(row.TableID || 0)}">
                             <div class="card-head">
                                 <div><div class="table-name">โต๊ะ ${escapeHtml(tableText)}</div></div>
+                                ${voidOrderNumHtml}
                             </div>
                             <div class="voided-badge">❌ ถูกยกเลิก</div>
                             <div class="product-block">
@@ -2392,12 +2409,17 @@ function initSoundSettings() {
                     ? `<div class="product-total-hint">รวมทั้งคิว ${formatQty(totalQtyForProduct)}</div>`
                     : '';
 
+                const orderNumHtml = state.showOrderNumber && row.ProcessID
+                    ? `<div class="order-num">#${String(Number(row.ProcessID)).padStart(6, '0')}</div>`
+                    : '';
+
                 return `
                     <article class="${cardClass}" data-table-id="${Number(row.TableID || 0)}">
                         <div class="card-head">
                             <div>
                                 <div class="table-name">โต๊ะ ${escapeHtml(tableText)}</div>
                             </div>
+                            ${orderNumHtml}
                         </div>
 
                         ${statusBadge}
@@ -3324,6 +3346,7 @@ function initSoundSettings() {
                 applyOutOfStockEnabled(d.settings.out_of_stock_enabled !== 0);
                 applyStaffLoginMode(Number(d.settings.hide_staff_login || 0) === 1);
                 state.checkoutQtyMode = Number(d.settings.checkout_qty_mode || 1);
+                state.showOrderNumber = Number(d.settings.show_order_number || 0) === 1;
                 var dbOk = (d.connection_message === 'เชื่อมต่อฐานข้อมูลปัจจุบันได้');
                 if (!dbOk) { showDbErrorState(d.connection_message); return; }
                 // DB OK — restore staff แล้วโหลดข้อมูล
