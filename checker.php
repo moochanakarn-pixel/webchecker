@@ -2621,8 +2621,13 @@ function initSoundSettings() {
                 const modal = backdrop.querySelector('.modal');
                 backdrop.style.display = 'flex';
                 requestAnimationFrame(function() {
-                    backdrop.classList.add('open');
-                    if (modal) modal.classList.add('open');
+                    backdrop.style.opacity = '1';
+                    backdrop.style.pointerEvents = 'auto';
+                    if (modal) {
+                        modal.style.opacity = '1';
+                        modal.style.pointerEvents = 'auto';
+                        modal.style.transform = 'translate(-50%,-50%)';
+                    }
                 });
             });
         }
@@ -2630,8 +2635,12 @@ function initSoundSettings() {
         function closeCheckoutQtyPopup(result) {
             const backdrop = document.getElementById('checkoutQtyBackdrop');
             const modal = backdrop.querySelector('.modal');
-            backdrop.classList.remove('open');
-            if (modal) modal.classList.remove('open');
+            backdrop.style.opacity = '0';
+            backdrop.style.pointerEvents = 'none';
+            if (modal) {
+                modal.style.opacity = '0';
+                modal.style.pointerEvents = 'none';
+            }
             setTimeout(function() { backdrop.style.display = 'none'; }, 200);
             if (_checkoutQtyResolve) {
                 _checkoutQtyResolve(result);
