@@ -3312,6 +3312,7 @@ function initSoundSettings() {
                 if (!d.success) { showDbErrorState('การตั้งค่าระบบไม่สมบูรณ์'); return; }
                 applyOutOfStockEnabled(d.settings.out_of_stock_enabled !== 0);
                 applyStaffLoginMode(Number(d.settings.hide_staff_login || 0) === 1);
+                state.checkoutQtyMode = Number(d.settings.checkout_qty_mode || 1);
                 var dbOk = (d.connection_message === 'เชื่อมต่อฐานข้อมูลปัจจุบันได้');
                 if (!dbOk) { showDbErrorState(d.connection_message); return; }
                 // DB OK — restore staff แล้วโหลดข้อมูล
