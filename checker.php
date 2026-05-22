@@ -229,7 +229,7 @@ $_ckBase = _computeCheckerBase();
         .status-badge.checkout-dark{background:linear-gradient(135deg,var(--secondary),#ffad59);color:#fff}
         .card-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;margin-bottom:8px}
         .table-name{font-size:20px;font-weight:bold;line-height:1.1;word-break:break-word}
-        .order-num{font-size:11px;font-weight:600;color:var(--muted);background:var(--surface-soft);border:1px solid var(--line);border-radius:6px;padding:2px 6px;white-space:nowrap;line-height:1.4;letter-spacing:.5px}
+
         .order-line{margin-top:3px;color:var(--muted);font-size:11px;line-height:1.4}
         .qty-badge{
             min-width:52px;min-height:52px;display:flex;align-items:center;justify-content:center;padding:6px;
@@ -2318,14 +2318,10 @@ function initSoundSettings() {
                 // voided card — manual confirm mode เท่านั้น
                 if (isVoided) {
                     const tableText = row.DisplayTableName || row.TableID || '-';
-                    const voidOrderNumHtml = state.showOrderNumber && row.ProcessID
-                        ? `<div class="order-num">#${String(Number(row.ProcessID)).padStart(6, '0')}</div>`
-                        : '';
                     return `
                         <article class="card card-voided" data-table-id="${Number(row.TableID || 0)}">
                             <div class="card-head">
                                 <div><div class="table-name">โต๊ะ ${escapeHtml(tableText)}</div></div>
-                                ${voidOrderNumHtml}
                             </div>
                             <div class="voided-badge">❌ ถูกยกเลิก</div>
                             <div class="product-block">
@@ -2409,8 +2405,8 @@ function initSoundSettings() {
                     ? `<div class="product-total-hint">รวมทั้งคิว ${formatQty(totalQtyForProduct)}</div>`
                     : '';
 
-                const orderNumHtml = state.showOrderNumber && row.ProcessID
-                    ? `<div class="order-num">#${String(Number(row.ProcessID)).padStart(6, '0')}</div>`
+                const orderNumField = state.showOrderNumber && row.ProcessID
+                    ? `<div class="field"><div class="field-label">Order#</div><div class="field-value">${String(Number(row.ProcessID)).padStart(6, '0')}</div></div>`
                     : '';
 
                 return `
@@ -2419,7 +2415,6 @@ function initSoundSettings() {
                             <div>
                                 <div class="table-name">โต๊ะ ${escapeHtml(tableText)}</div>
                             </div>
-                            ${orderNumHtml}
                         </div>
 
                         ${statusBadge}
@@ -2442,6 +2437,7 @@ function initSoundSettings() {
                                 <div class="field-label">ส่งเข้าเมื่อ</div>
                                 <div class="field-value">${escapeHtml(formatTime(row.SubmitOrderDateTime))}</div>
                             </div>
+                            ${orderNumField}
                         </div>
 
                         ${actionHtml}
