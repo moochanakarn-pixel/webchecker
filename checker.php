@@ -2618,18 +2618,20 @@ function initSoundSettings() {
                 document.getElementById('checkoutQtyDisplay').textContent = '1';
                 document.getElementById('checkoutQtyMaxLabel').textContent = 'จำนวนสูงสุด: ' + maxQty;
                 const backdrop = document.getElementById('checkoutQtyBackdrop');
+                const modal = backdrop.querySelector('.modal');
                 backdrop.style.display = 'flex';
                 requestAnimationFrame(function() {
-                    backdrop.style.opacity = '1';
-                    backdrop.style.pointerEvents = 'auto';
+                    backdrop.classList.add('open');
+                    if (modal) modal.classList.add('open');
                 });
             });
         }
 
         function closeCheckoutQtyPopup(result) {
             const backdrop = document.getElementById('checkoutQtyBackdrop');
-            backdrop.style.opacity = '0';
-            backdrop.style.pointerEvents = 'none';
+            const modal = backdrop.querySelector('.modal');
+            backdrop.classList.remove('open');
+            if (modal) modal.classList.remove('open');
             setTimeout(function() { backdrop.style.display = 'none'; }, 200);
             if (_checkoutQtyResolve) {
                 _checkoutQtyResolve(result);
