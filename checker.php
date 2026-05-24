@@ -2658,6 +2658,7 @@ function initSoundSettings() {
             if (modal) {
                 modal.style.opacity = '0';
                 modal.style.pointerEvents = 'none';
+                modal.style.transform = 'translate(-50%,-54%)';
             }
             setTimeout(function() { backdrop.style.display = 'none'; }, 200);
             if (_checkoutQtyResolve) {
