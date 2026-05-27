@@ -2270,7 +2270,6 @@ function initSoundSettings() {
             renderRecentFinished(state.recent_finished_rows || []);
             syncDrawerState();
             applyZoneFilterSync();
-            if (window._kdsApplySaleModeFilter) window._kdsApplySaleModeFilter();
         }
         function renderFilterInfo() {
         }
@@ -3706,8 +3705,8 @@ function initSoundSettings() {
         let selectedSaleModeIds = new Set(); // empty = ทั้งหมด
 
         function applyZoneFilterSync() {
-            // list-view cards
-            document.querySelectorAll('article[data-table-id]').forEach(function(el) {
+            // list-view cards (exclude card-table which have their own loop below)
+            document.querySelectorAll('article[data-table-id]:not(.card-table)').forEach(function(el) {
                 const tid  = parseInt(el.dataset.tableId || '0');
                 const smid = parseInt(el.dataset.saleModeId || '0');
                 const zoneOk = cachedZoneTableIds === null || cachedZoneTableIds.has(tid);
@@ -3826,9 +3825,9 @@ function initSoundSettings() {
             kdsApiFetch(_kdsBase + '/api_checker.php?action=list_tables_in_zone&zoneid=' + zoneid + '&_=' + Date.now(), { cache: 'no-store' })
             .then(function(r){ return r.json(); })
             .then(function(d){
-                if (!d.success || !d.table_ids) return;
+                if (!d.success || !d.table_ids) { cachedZoneTableIds = null; applyZoneFilterSync(); return; }
                 cachedZoneTableIds = new Set(d.table_ids.map(Number));
-                applyZoneFilterSync();
+                applyZoneFilterSync(); // applies both zone AND salemode filters together
             }).catch(function(e){ console.warn('zone filter error', e); });
         }
 
@@ -3911,18 +3910,24 @@ function initSoundSettings() {
 
         // ── restore from localStorage ─────────────────────
         (function restore() {
+            // Restore salemode IDs first (sync, no fetch needed)
+            try {
+                const savedSmIds = JSON.parse(localStorage.getItem('checker_salemode_ids') || '[]');
+                if (Array.isArray(savedSmIds)) savedSmIds.forEach(function(id) { selectedSaleModeIds.add(Number(id)); });
+            } catch(e) {}
+
             const savedZoneId = parseInt(localStorage.getItem('checker_zone_id') || '0');
             const savedZoneName = localStorage.getItem('checker_zone_name') || 'ทั้งหมด';
             if (savedZoneId > 0) {
                 currentZoneId   = savedZoneId;
                 currentZoneName = savedZoneName;
+                // filterCardsByZone will call applyZoneFilterSync() after fetch,
+                // so both zone AND salemode filters are applied together (no race)
                 filterCardsByZone(currentZoneId);
+            } else if (selectedSaleModeIds.size > 0) {
+                // No zone filter, but salemode filter needs immediate apply
+                applyZoneFilterSync();
             }
-            try {
-                const savedSmIds = JSON.parse(localStorage.getItem('checker_salemode_ids') || '[]');
-                if (Array.isArray(savedSmIds)) savedSmIds.forEach(function(id) { selectedSaleModeIds.add(Number(id)); });
-                if (selectedSaleModeIds.size > 0) applyZoneFilterSync();
-            } catch(e) {}
             updateFilterLabel();
         })();
 
