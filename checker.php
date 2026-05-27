@@ -553,8 +553,7 @@ $_ckBase = _computeCheckerBase();
                     </div>
                     <button type="button" class="btn btn-neutral" id="openBarcodeCameraBtn">📷 สแกนกล้อง</button>
                 </div>
-                <button type="button" class="btn btn-neutral" id="openZoneBtn">📍 โซน: <span id="zoneLabel">ทั้งหมด</span></button>
-                <button type="button" class="btn btn-neutral" id="openSaleModeBtn">🍱 เซลโหมด: <span id="saleModeLabel">ทั้งหมด</span></button>
+                <button type="button" class="btn btn-neutral" id="openZoneBtn">📍 กรอง: <span id="zoneLabel">ทั้งหมด</span></button>
                 <button type="button" class="btn btn-ghost js-open-finished" id="openFinishedBtn">✅ เสร็จแล้ว <span id="topFinishedCount">0</span></button>
                 <button type="button" class="btn btn-primary" id="refreshBtn">🔄 รีเฟรช</button>
                 <button type="button" class="btn-fullscreen" id="fsBtn" title="เต็มจอ">
@@ -3647,34 +3646,24 @@ function initSoundSettings() {
     </div>
 
     <div class="modal-backdrop" id="zoneModalBackdrop">
-        <div class="modal" id="zoneModal" style="width:340px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column">
+        <div class="modal" id="zoneModal" style="width:360px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column">
             <div class="modal-head">
-                <h2 class="modal-title">📍 เลือกโซน</h2>
+                <h2 class="modal-title">🔍 กรองออเดอร์</h2>
             </div>
-            <div class="modal-body" style="padding:12px 16px">
-                <div id="zoneList" style="display:flex;flex-direction:column;gap:8px">
-                    <button class="btn btn-primary zone-item" data-zoneid="0" style="width:100%;text-align:left;padding:12px 16px;border-radius:12px;font-size:15px">🌐 ทั้งหมด</button>
+            <div class="modal-body" style="padding:14px 16px;overflow-y:auto;flex:1">
+                <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">📍 โซน</div>
+                <div id="zoneList" style="display:flex;flex-direction:column;gap:6px">
+                    <button class="btn btn-primary zone-item" data-zoneid="0" style="width:100%;text-align:left;padding:10px 14px;border-radius:10px;font-size:14px">🌐 ทั้งหมด</button>
+                </div>
+                <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 8px">🍱 เซลโหมด</div>
+                <div style="font-size:12px;color:var(--muted);margin-bottom:8px">ไม่ติ๊ก = แสดงทุกโหมด</div>
+                <div id="saleModeCheckList" style="display:flex;flex-direction:column;gap:6px">
+                    <div style="font-size:13px;color:var(--muted)">กำลังโหลด...</div>
                 </div>
             </div>
-            <div class="modal-foot">
-                <button class="btn btn-neutral" id="zoneModalCloseBtn">ปิด</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- SaleMode Filter Modal -->
-    <div class="modal-backdrop" id="saleModeModalBackdrop">
-        <div class="modal" id="saleModeModal" style="width:340px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column">
-            <div class="modal-head">
-                <h2 class="modal-title">🍱 เลือก SaleMode</h2>
-            </div>
-            <div class="modal-body" style="padding:12px 16px">
-                <div id="saleModeList" style="display:flex;flex-direction:column;gap:8px">
-                    <button class="btn btn-primary salemode-item" data-salemodeid="0" style="width:100%;text-align:left;padding:12px 16px;border-radius:12px;font-size:15px">🌐 ทั้งหมด</button>
-                </div>
-            </div>
-            <div class="modal-foot">
-                <button class="btn btn-neutral" id="saleModeModalCloseBtn">ปิด</button>
+            <div class="modal-foot" style="gap:8px">
+                <button class="btn btn-neutral" id="filterClearBtn">ล้างทั้งหมด</button>
+                <button class="btn btn-primary" id="zoneModalCloseBtn">ปิด</button>
             </div>
         </div>
     </div>
@@ -3712,15 +3701,34 @@ function initSoundSettings() {
         shopSel.addEventListener('change', updateShopName);
     })();
 
-    // ── Zone Filter ─────────────────────────────────────
-        // cache table IDs ของ zone ที่เลือกไว้ ใช้กรองหลัง render โดยไม่ต้องยิง API ซ้ำ
-        let cachedZoneTableIds = null; // null = ทั้งหมด, Set = กรองตาม zone
+    // ── Zone + SaleMode Combined Filter ─────────────────
+        let cachedZoneTableIds = null;      // null = ทั้งหมด
+        let selectedSaleModeIds = new Set(); // empty = ทั้งหมด
 
         function applyZoneFilterSync() {
-            if (cachedZoneTableIds === null) return;
+            // list-view cards
             document.querySelectorAll('article[data-table-id]').forEach(function(el) {
-                const tid = parseInt(el.dataset.tableId || '0');
-                el.style.display = cachedZoneTableIds.has(tid) ? '' : 'none';
+                const tid  = parseInt(el.dataset.tableId || '0');
+                const smid = parseInt(el.dataset.saleModeId || '0');
+                const zoneOk = cachedZoneTableIds === null || cachedZoneTableIds.has(tid);
+                const smOk   = selectedSaleModeIds.size === 0 || selectedSaleModeIds.has(smid);
+                el.style.display = (zoneOk && smOk) ? '' : 'none';
+            });
+            // table-view: filter items, hide card if all items hidden
+            document.querySelectorAll('article.card-table').forEach(function(card) {
+                const tid = parseInt(card.dataset.tableId || '0');
+                const zoneOk = cachedZoneTableIds === null || cachedZoneTableIds.has(tid);
+                if (!zoneOk) { card.style.display = 'none'; return; }
+                const items = card.querySelectorAll('.ct-item[data-sale-mode-id]');
+                if (!items.length) { card.style.display = ''; return; }
+                let anyVisible = false;
+                items.forEach(function(item) {
+                    const smid = parseInt(item.dataset.saleModeId || '0');
+                    const show = selectedSaleModeIds.size === 0 || selectedSaleModeIds.has(smid);
+                    item.style.display = show ? '' : 'none';
+                    if (show) anyVisible = true;
+                });
+                card.style.display = anyVisible ? '' : 'none';
             });
         }
     window.applyOutOfStockEnabled = function(enabled) {
@@ -3734,15 +3742,18 @@ function initSoundSettings() {
         let currentZoneId = 0;
         let currentZoneName = 'ทั้งหมด';
         let zones = [];
+        let saleModes = [];
 
-        const openBtn    = document.getElementById('openZoneBtn');
-        const backdrop   = document.getElementById('zoneModalBackdrop');
-        const modal      = document.getElementById('zoneModal');
-        const closeBtn   = document.getElementById('zoneModalCloseBtn');
-        const zoneList   = document.getElementById('zoneList');
-        const zoneLabel  = document.getElementById('zoneLabel');
+        const openBtn     = document.getElementById('openZoneBtn');
+        const backdrop    = document.getElementById('zoneModalBackdrop');
+        const modal       = document.getElementById('zoneModal');
+        const closeBtn    = document.getElementById('zoneModalCloseBtn');
+        const clearBtn    = document.getElementById('filterClearBtn');
+        const zoneList    = document.getElementById('zoneList');
+        const smCheckList = document.getElementById('saleModeCheckList');
+        const zoneLabel   = document.getElementById('zoneLabel');
 
-        // โหลด zones จาก API
+        // ── load zones ───────────────────────────────────
         async function loadZones() {
             try {
                 const r = await kdsApiFetch(_kdsBase + '/api_checker.php?action=list_zones&_=' + Date.now(), { cache: 'no-store' });
@@ -3753,11 +3764,10 @@ function initSoundSettings() {
                         const btn = document.createElement('button');
                         btn.className = 'btn btn-neutral zone-item';
                         btn.dataset.zoneid = z.zoneid;
-                        btn.style.cssText = 'width:100%;text-align:left;padding:12px 16px;border-radius:12px';
+                        btn.style.cssText = 'width:100%;text-align:left;padding:10px 14px;border-radius:10px;font-size:14px';
                         btn.textContent = '📍 ' + z.zonename;
                         zoneList.appendChild(btn);
                     });
-                    // อัปเดต label ถ้า zone ถูก force-set ก่อน zones โหลดเสร็จ
                     if (currentZoneId > 0 && zoneLabel) {
                         const zf = zones.find(function(zz) { return zz.zoneid === currentZoneId; });
                         if (zf) zoneLabel.textContent = zf.zonename;
@@ -3766,13 +3776,47 @@ function initSoundSettings() {
             } catch(e) { console.warn('load zones error', e); }
         }
 
-        // filter cards ตาม zone
+        // ── load sale modes (checkboxes) ─────────────────
+        async function loadSaleModes() {
+            try {
+                const r = await kdsApiFetch(_kdsBase + '/api_checker.php?action=list_sale_modes&_=' + Date.now(), { cache: 'no-store' });
+                const d = await r.json();
+                if (!smCheckList) return;
+                if (d.success && d.sale_modes && d.sale_modes.length > 0) {
+                    saleModes = d.sale_modes;
+                    smCheckList.innerHTML = '';
+                    d.sale_modes.forEach(function(sm) {
+                        const label = document.createElement('label');
+                        label.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;font-size:14px;background:var(--surface-soft)';
+                        const cb = document.createElement('input');
+                        cb.type = 'checkbox';
+                        cb.value = sm.sale_mode_id;
+                        cb.style.cssText = 'width:17px;height:17px;flex-shrink:0;cursor:pointer;accent-color:#2563eb';
+                        cb.checked = selectedSaleModeIds.has(sm.sale_mode_id);
+                        cb.addEventListener('change', function() {
+                            if (this.checked) selectedSaleModeIds.add(sm.sale_mode_id);
+                            else selectedSaleModeIds.delete(sm.sale_mode_id);
+                            saveSaleModeFilter();
+                            updateFilterLabel();
+                            applyZoneFilterSync();
+                        });
+                        const span = document.createElement('span');
+                        span.textContent = sm.sale_mode_name;
+                        label.appendChild(cb);
+                        label.appendChild(span);
+                        smCheckList.appendChild(label);
+                    });
+                } else {
+                    smCheckList.innerHTML = '<div style="font-size:13px;color:var(--muted)">ไม่พบข้อมูลเซลโหมด</div>';
+                }
+            } catch(e) { console.warn('load sale modes error', e); }
+        }
+
+        // ── filter apply ─────────────────────────────────
         function applyZoneFilter() {
             if (currentZoneId === 0) {
                 cachedZoneTableIds = null;
-                document.querySelectorAll('article[data-table-id]').forEach(function(el){
-                    el.style.display = '';
-                });
+                applyZoneFilterSync();
                 return;
             }
             filterCardsByZone(currentZoneId);
@@ -3788,16 +3832,34 @@ function initSoundSettings() {
             }).catch(function(e){ console.warn('zone filter error', e); });
         }
 
-        // event: เปิด modal
+        // ── label ─────────────────────────────────────────
+        function updateFilterLabel() {
+            if (!zoneLabel) return;
+            const parts = [];
+            if (currentZoneId > 0) parts.push(currentZoneName);
+            if (selectedSaleModeIds.size > 0) parts.push(selectedSaleModeIds.size + ' โหมด');
+            zoneLabel.textContent = parts.length ? parts.join(' · ') : 'ทั้งหมด';
+        }
+
+        function saveSaleModeFilter() {
+            localStorage.setItem('checker_salemode_ids', JSON.stringify(Array.from(selectedSaleModeIds)));
+        }
+
+        // ── modal events ──────────────────────────────────
         if (openBtn) {
-            openBtn.addEventListener('click', function(){
+            openBtn.addEventListener('click', function() {
                 backdrop.classList.add('open');
                 modal.classList.add('open');
-                // update active state
-                document.querySelectorAll('.zone-item').forEach(function(b){
+                document.querySelectorAll('.zone-item').forEach(function(b) {
                     b.classList.toggle('btn-primary', parseInt(b.dataset.zoneid) === currentZoneId);
                     b.classList.toggle('btn-neutral', parseInt(b.dataset.zoneid) !== currentZoneId);
                 });
+                // sync checkboxes ให้ตรงกับ state ปัจจุบัน
+                if (smCheckList) {
+                    smCheckList.querySelectorAll('input[type=checkbox]').forEach(function(cb) {
+                        cb.checked = selectedSaleModeIds.has(parseInt(cb.value));
+                    });
+                }
             });
         }
 
@@ -3808,158 +3870,68 @@ function initSoundSettings() {
         if (closeBtn) closeBtn.addEventListener('click', closeZoneModal);
         if (backdrop) backdrop.addEventListener('click', function(e){ if(e.target === backdrop) closeZoneModal(); });
 
-        // event: เลือก zone
+        // ล้างทั้งหมด
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function() {
+                currentZoneId = 0;
+                currentZoneName = 'ทั้งหมด';
+                selectedSaleModeIds.clear();
+                localStorage.removeItem('checker_zone_id');
+                localStorage.removeItem('checker_zone_name');
+                saveSaleModeFilter();
+                updateFilterLabel();
+                if (smCheckList) smCheckList.querySelectorAll('input[type=checkbox]').forEach(function(cb){ cb.checked = false; });
+                document.querySelectorAll('.zone-item').forEach(function(b) {
+                    b.classList.toggle('btn-primary', parseInt(b.dataset.zoneid) === 0);
+                    b.classList.toggle('btn-neutral', parseInt(b.dataset.zoneid) !== 0);
+                });
+                cachedZoneTableIds = null;
+                applyZoneFilterSync();
+            });
+        }
+
+        // เลือก zone
         if (zoneList) {
-            zoneList.addEventListener('click', function(e){
+            zoneList.addEventListener('click', function(e) {
                 const btn = e.target.closest('.zone-item');
                 if (!btn) return;
                 currentZoneId   = parseInt(btn.dataset.zoneid);
                 currentZoneName = currentZoneId === 0 ? 'ทั้งหมด' : btn.textContent.replace('📍 ', '').trim();
-                if (zoneLabel) zoneLabel.textContent = currentZoneName;
                 localStorage.setItem('checker_zone_id', String(currentZoneId));
                 localStorage.setItem('checker_zone_name', currentZoneName);
                 kdsLogActivity('ZONE_CHANGE', 'Zone:' + currentZoneName + '(' + currentZoneId + ')', Number(localStorage.getItem('checker_finish_staff_id') || 0));
-                closeZoneModal();
+                document.querySelectorAll('.zone-item').forEach(function(b) {
+                    b.classList.toggle('btn-primary', parseInt(b.dataset.zoneid) === currentZoneId);
+                    b.classList.toggle('btn-neutral', parseInt(b.dataset.zoneid) !== currentZoneId);
+                });
+                updateFilterLabel();
                 applyZoneFilter();
             });
         }
 
-        // คืนค่า zone จาก localStorage (จำ zone ข้ามรอบ refresh)
-        (function restoreZone(){
-            const savedId = parseInt(localStorage.getItem('checker_zone_id') || '0');
-            const savedName = localStorage.getItem('checker_zone_name') || 'ทั้งหมด';
-            if (savedId > 0) {
-                currentZoneId   = savedId;
-                currentZoneName = savedName;
-                if (zoneLabel) zoneLabel.textContent = currentZoneName;
+        // ── restore from localStorage ─────────────────────
+        (function restore() {
+            const savedZoneId = parseInt(localStorage.getItem('checker_zone_id') || '0');
+            const savedZoneName = localStorage.getItem('checker_zone_name') || 'ทั้งหมด';
+            if (savedZoneId > 0) {
+                currentZoneId   = savedZoneId;
+                currentZoneName = savedZoneName;
                 filterCardsByZone(currentZoneId);
             }
+            try {
+                const savedSmIds = JSON.parse(localStorage.getItem('checker_salemode_ids') || '[]');
+                if (Array.isArray(savedSmIds)) savedSmIds.forEach(function(id) { selectedSaleModeIds.add(Number(id)); });
+                if (selectedSaleModeIds.size > 0) applyZoneFilterSync();
+            } catch(e) {}
+            updateFilterLabel();
         })();
 
-        // expose สำหรับ setInterval ใน script block หลัก
+        // expose
         window._kdsGetCurrentZoneId = function() { return currentZoneId; };
         window._kdsFilterCardsByZone = filterCardsByZone;
+        window._kdsApplySaleModeFilter = applyZoneFilterSync;
 
-        // โหลด zones ตอนเริ่ม
         loadZones();
-    })();
-
-    // ── SaleMode Filter ──────────────────────────────────
-    (function(){
-        let currentSaleModeId = 0;
-        let currentSaleModeName = 'ทั้งหมด';
-        let saleModes = [];
-
-        const openBtn  = document.getElementById('openSaleModeBtn');
-        const backdrop = document.getElementById('saleModeModalBackdrop');
-        const modal    = document.getElementById('saleModeModal');
-        const closeBtn = document.getElementById('saleModeModalCloseBtn');
-        const list     = document.getElementById('saleModeList');
-        const label    = document.getElementById('saleModeLabel');
-
-        function applySaleModeFilter() {
-            if (currentSaleModeId === 0) {
-                // show all
-                document.querySelectorAll('article[data-table-id]').forEach(function(el) {
-                    el.style.display = '';
-                });
-                document.querySelectorAll('.ct-item[data-sale-mode-id]').forEach(function(el) {
-                    el.style.display = '';
-                });
-                // show all table cards
-                document.querySelectorAll('article.card-table').forEach(function(el) {
-                    el.style.display = '';
-                });
-                return;
-            }
-            // list view: show/hide article cards
-            document.querySelectorAll('article[data-sale-mode-id]').forEach(function(el) {
-                const smid = parseInt(el.dataset.saleModeId || '0');
-                el.style.display = (smid === currentSaleModeId) ? '' : 'none';
-            });
-            // table view: show/hide ct-items, then hide table card if all items hidden
-            document.querySelectorAll('article.card-table').forEach(function(card) {
-                const items = card.querySelectorAll('.ct-item[data-sale-mode-id]');
-                let anyVisible = false;
-                items.forEach(function(item) {
-                    const smid = parseInt(item.dataset.saleModeId || '0');
-                    const show = (smid === currentSaleModeId);
-                    item.style.display = show ? '' : 'none';
-                    if (show) anyVisible = true;
-                });
-                card.style.display = anyVisible ? '' : 'none';
-            });
-        }
-
-        async function loadSaleModes() {
-            try {
-                const r = await kdsApiFetch(_kdsBase + '/api_checker.php?action=list_sale_modes&_=' + Date.now(), { cache: 'no-store' });
-                const d = await r.json();
-                if (d.success && d.sale_modes && d.sale_modes.length > 0) {
-                    saleModes = d.sale_modes;
-                    d.sale_modes.forEach(function(sm) {
-                        const btn = document.createElement('button');
-                        btn.className = 'btn btn-neutral salemode-item';
-                        btn.dataset.salemodeid = sm.sale_mode_id;
-                        btn.style.cssText = 'width:100%;text-align:left;padding:12px 16px;border-radius:12px';
-                        btn.textContent = '🍱 ' + sm.sale_mode_name;
-                        list.appendChild(btn);
-                    });
-                    if (currentSaleModeId > 0 && label) {
-                        const found = saleModes.find(function(s) { return s.sale_mode_id === currentSaleModeId; });
-                        if (found) label.textContent = found.sale_mode_name;
-                    }
-                }
-            } catch(e) { console.warn('load sale modes error', e); }
-        }
-
-        if (openBtn) {
-            openBtn.addEventListener('click', function() {
-                backdrop.classList.add('open');
-                modal.classList.add('open');
-                document.querySelectorAll('.salemode-item').forEach(function(b) {
-                    b.classList.toggle('btn-primary', parseInt(b.dataset.salemodeid) === currentSaleModeId);
-                    b.classList.toggle('btn-neutral', parseInt(b.dataset.salemodeid) !== currentSaleModeId);
-                });
-            });
-        }
-
-        function closeSaleModeModal() {
-            backdrop.classList.remove('open');
-            modal.classList.remove('open');
-        }
-        if (closeBtn) closeBtn.addEventListener('click', closeSaleModeModal);
-        if (backdrop) backdrop.addEventListener('click', function(e) { if (e.target === backdrop) closeSaleModeModal(); });
-
-        if (list) {
-            list.addEventListener('click', function(e) {
-                const btn = e.target.closest('.salemode-item');
-                if (!btn) return;
-                currentSaleModeId   = parseInt(btn.dataset.salemodeid);
-                currentSaleModeName = currentSaleModeId === 0 ? 'ทั้งหมด' : btn.textContent.replace('🍱 ', '').trim();
-                if (label) label.textContent = currentSaleModeName;
-                localStorage.setItem('checker_salemode_id', String(currentSaleModeId));
-                localStorage.setItem('checker_salemode_name', currentSaleModeName);
-                closeSaleModeModal();
-                applySaleModeFilter();
-            });
-        }
-
-        // restore from localStorage
-        (function restore() {
-            const savedId = parseInt(localStorage.getItem('checker_salemode_id') || '0');
-            const savedName = localStorage.getItem('checker_salemode_name') || 'ทั้งหมด';
-            if (savedId > 0) {
-                currentSaleModeId   = savedId;
-                currentSaleModeName = savedName;
-                if (label) label.textContent = currentSaleModeName;
-                applySaleModeFilter();
-            }
-        })();
-
-        // expose for use after re-render
-        window._kdsApplySaleModeFilter = applySaleModeFilter;
-
         loadSaleModes();
     })();
 
