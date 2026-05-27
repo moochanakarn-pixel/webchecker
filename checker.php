@@ -554,6 +554,7 @@ $_ckBase = _computeCheckerBase();
                     <button type="button" class="btn btn-neutral" id="openBarcodeCameraBtn">📷 สแกนกล้อง</button>
                 </div>
                 <button type="button" class="btn btn-neutral" id="openZoneBtn">📍 โซน: <span id="zoneLabel">ทั้งหมด</span></button>
+                <button type="button" class="btn btn-neutral" id="openSaleModeBtn">🍱 เซลโหมด: <span id="saleModeLabel">ทั้งหมด</span></button>
                 <button type="button" class="btn btn-ghost js-open-finished" id="openFinishedBtn">✅ เสร็จแล้ว <span id="topFinishedCount">0</span></button>
                 <button type="button" class="btn btn-primary" id="refreshBtn">🔄 รีเฟรช</button>
                 <button type="button" class="btn-fullscreen" id="fsBtn" title="เต็มจอ">
@@ -2270,6 +2271,7 @@ function initSoundSettings() {
             renderRecentFinished(state.recent_finished_rows || []);
             syncDrawerState();
             applyZoneFilterSync();
+            if (window._kdsApplySaleModeFilter) window._kdsApplySaleModeFilter();
         }
         function renderFilterInfo() {
         }
@@ -2452,7 +2454,7 @@ function initSoundSettings() {
                     }
                 }
 
-                return `<div class="${itemCls}">
+                return `<div class="${itemCls}" data-sale-mode-id="${Number(row.SaleModeID || 0)}">
                     <div class="ct-item-info">
                         ${specialBadge}
                         ${parentLabel}
@@ -2531,7 +2533,7 @@ function initSoundSettings() {
                 if (isVoided) {
                     const tableText = row.DisplayTableName || row.TableID || '-';
                     return `
-                        <article class="card card-voided" data-table-id="${Number(row.TableID || 0)}">
+                        <article class="card card-voided" data-table-id="${Number(row.TableID || 0)}" data-sale-mode-id="${Number(row.SaleModeID || 0)}">
                             <div class="card-head">
                                 <div><div class="table-name">โต๊ะ ${escapeHtml(tableText)}</div></div>
                             </div>
@@ -2622,7 +2624,7 @@ function initSoundSettings() {
                     : '';
 
                 return `
-                    <article class="${cardClass}" data-table-id="${Number(row.TableID || 0)}">
+                    <article class="${cardClass}" data-table-id="${Number(row.TableID || 0)}" data-sale-mode-id="${Number(row.SaleModeID || 0)}">
                         <div class="card-head">
                             <div>
                                 <div class="table-name">โต๊ะ ${escapeHtml(tableText)}</div>
@@ -3660,6 +3662,23 @@ function initSoundSettings() {
         </div>
     </div>
 
+    <!-- SaleMode Filter Modal -->
+    <div class="modal-backdrop" id="saleModeModalBackdrop">
+        <div class="modal" id="saleModeModal" style="width:340px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column">
+            <div class="modal-head">
+                <h2 class="modal-title">🍱 เลือก SaleMode</h2>
+            </div>
+            <div class="modal-body" style="padding:12px 16px">
+                <div id="saleModeList" style="display:flex;flex-direction:column;gap:8px">
+                    <button class="btn btn-primary salemode-item" data-salemodeid="0" style="width:100%;text-align:left;padding:12px 16px;border-radius:12px;font-size:15px">🌐 ทั้งหมด</button>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn btn-neutral" id="saleModeModalCloseBtn">ปิด</button>
+            </div>
+        </div>
+    </div>
+
     <script>
     // ── Shop Dropdown ────────────────────────────────────
     (function(){
@@ -3823,6 +3842,125 @@ function initSoundSettings() {
 
         // โหลด zones ตอนเริ่ม
         loadZones();
+    })();
+
+    // ── SaleMode Filter ──────────────────────────────────
+    (function(){
+        let currentSaleModeId = 0;
+        let currentSaleModeName = 'ทั้งหมด';
+        let saleModes = [];
+
+        const openBtn  = document.getElementById('openSaleModeBtn');
+        const backdrop = document.getElementById('saleModeModalBackdrop');
+        const modal    = document.getElementById('saleModeModal');
+        const closeBtn = document.getElementById('saleModeModalCloseBtn');
+        const list     = document.getElementById('saleModeList');
+        const label    = document.getElementById('saleModeLabel');
+
+        function applySaleModeFilter() {
+            if (currentSaleModeId === 0) {
+                // show all
+                document.querySelectorAll('article[data-table-id]').forEach(function(el) {
+                    el.style.display = '';
+                });
+                document.querySelectorAll('.ct-item[data-sale-mode-id]').forEach(function(el) {
+                    el.style.display = '';
+                });
+                // show all table cards
+                document.querySelectorAll('article.card-table').forEach(function(el) {
+                    el.style.display = '';
+                });
+                return;
+            }
+            // list view: show/hide article cards
+            document.querySelectorAll('article[data-sale-mode-id]').forEach(function(el) {
+                const smid = parseInt(el.dataset.saleModeId || '0');
+                el.style.display = (smid === currentSaleModeId) ? '' : 'none';
+            });
+            // table view: show/hide ct-items, then hide table card if all items hidden
+            document.querySelectorAll('article.card-table').forEach(function(card) {
+                const items = card.querySelectorAll('.ct-item[data-sale-mode-id]');
+                let anyVisible = false;
+                items.forEach(function(item) {
+                    const smid = parseInt(item.dataset.saleModeId || '0');
+                    const show = (smid === currentSaleModeId);
+                    item.style.display = show ? '' : 'none';
+                    if (show) anyVisible = true;
+                });
+                card.style.display = anyVisible ? '' : 'none';
+            });
+        }
+
+        async function loadSaleModes() {
+            try {
+                const r = await kdsApiFetch(_kdsBase + '/api_checker.php?action=list_sale_modes&_=' + Date.now(), { cache: 'no-store' });
+                const d = await r.json();
+                if (d.success && d.sale_modes && d.sale_modes.length > 0) {
+                    saleModes = d.sale_modes;
+                    d.sale_modes.forEach(function(sm) {
+                        const btn = document.createElement('button');
+                        btn.className = 'btn btn-neutral salemode-item';
+                        btn.dataset.salemodeid = sm.sale_mode_id;
+                        btn.style.cssText = 'width:100%;text-align:left;padding:12px 16px;border-radius:12px';
+                        btn.textContent = '🍱 ' + sm.sale_mode_name;
+                        list.appendChild(btn);
+                    });
+                    if (currentSaleModeId > 0 && label) {
+                        const found = saleModes.find(function(s) { return s.sale_mode_id === currentSaleModeId; });
+                        if (found) label.textContent = found.sale_mode_name;
+                    }
+                }
+            } catch(e) { console.warn('load sale modes error', e); }
+        }
+
+        if (openBtn) {
+            openBtn.addEventListener('click', function() {
+                backdrop.classList.add('open');
+                modal.classList.add('open');
+                document.querySelectorAll('.salemode-item').forEach(function(b) {
+                    b.classList.toggle('btn-primary', parseInt(b.dataset.salemodeid) === currentSaleModeId);
+                    b.classList.toggle('btn-neutral', parseInt(b.dataset.salemodeid) !== currentSaleModeId);
+                });
+            });
+        }
+
+        function closeSaleModeModal() {
+            backdrop.classList.remove('open');
+            modal.classList.remove('open');
+        }
+        if (closeBtn) closeBtn.addEventListener('click', closeSaleModeModal);
+        if (backdrop) backdrop.addEventListener('click', function(e) { if (e.target === backdrop) closeSaleModeModal(); });
+
+        if (list) {
+            list.addEventListener('click', function(e) {
+                const btn = e.target.closest('.salemode-item');
+                if (!btn) return;
+                currentSaleModeId   = parseInt(btn.dataset.salemodeid);
+                currentSaleModeName = currentSaleModeId === 0 ? 'ทั้งหมด' : btn.textContent.replace('🍱 ', '').trim();
+                if (label) label.textContent = currentSaleModeName;
+                localStorage.setItem('checker_salemode_id', String(currentSaleModeId));
+                localStorage.setItem('checker_salemode_name', currentSaleModeName);
+                closeSaleModeModal();
+                applySaleModeFilter();
+            });
+        }
+
+        // restore from localStorage
+        (function restore() {
+            const savedId = parseInt(localStorage.getItem('checker_salemode_id') || '0');
+            const savedName = localStorage.getItem('checker_salemode_name') || 'ทั้งหมด';
+            if (savedId > 0) {
+                currentSaleModeId   = savedId;
+                currentSaleModeName = savedName;
+                if (label) label.textContent = currentSaleModeName;
+                applySaleModeFilter();
+            }
+        })();
+
+        // expose for use after re-render
+        window._kdsApplySaleModeFilter = applySaleModeFilter;
+
+        loadSaleModes();
     })();
 
     // ── Staff Login (topbar) ─────────────────────────────
