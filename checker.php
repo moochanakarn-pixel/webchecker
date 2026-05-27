@@ -484,6 +484,49 @@ $_ckBase = _computeCheckerBase();
         .fs-ui-hidden .panel-head { opacity:0; max-height:0; overflow:hidden; margin:0; padding:0; pointer-events:none; transition:opacity .35s, max-height .35s; }
         .stats { max-height:80px; transition:opacity .35s, max-height .35s; }
         .panel-head { max-height:80px; transition:opacity .35s, max-height .35s; }
+
+        /* ── View Toggle ─────────────────────────────────── */
+        .view-toggle{display:flex;gap:4px;align-items:center}
+        .view-btn{background:transparent;border:1px solid rgba(255,255,255,.45);color:#fff;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap}
+        .view-btn:hover{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.7)}
+        .view-btn.active{background:rgba(255,255,255,.28);border-color:#fff}
+
+        /* ── Table View — layout ─────────────────────────── */
+        #activeCards.table-view{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;align-items:start}
+        .card-table{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 2px 8px rgba(17,56,92,.06)}
+        .card-table.warn-yellow{border-color:#ffe066;background:linear-gradient(180deg,#fffde7,#fffbf0);box-shadow:0 0 0 3px rgba(255,214,0,.18)}
+        .card-table.warn-red{border-color:#ffb3ab;background:linear-gradient(180deg,#fff2f0,#fff8f7);box-shadow:0 0 0 3px rgba(228,76,58,.14);animation:pulse-red 1.6s ease-in-out infinite}
+        @keyframes pulse-red{0%,100%{box-shadow:0 0 0 3px rgba(228,76,58,.14)}50%{box-shadow:0 0 0 5px rgba(228,76,58,.32)}}
+
+        /* ── Table View — card header ────────────────────── */
+        .ct-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:10px 12px 8px;border-bottom:1px solid var(--line)}
+        .ct-name{font-size:20px;font-weight:bold;color:#0f172a;line-height:1.1}
+        .ct-sub{font-size:11px;color:var(--muted);margin-top:3px}
+        .ct-badge{font-size:12px;font-weight:700;background:var(--surface-soft);border:1px solid var(--line);border-radius:999px;padding:3px 9px;white-space:nowrap;flex-shrink:0}
+        .warn-yellow .ct-badge{color:#92600a;border-color:#ffe066;background:#fffde7}
+        .warn-red .ct-badge{color:#b91c1c;border-color:#ffb3ab;background:#fff2f0}
+
+        /* ── Table View — item list ──────────────────────── */
+        .ct-items{display:flex;flex-direction:column}
+        .ct-item{display:flex;align-items:flex-start;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line)}
+        .ct-item:last-child{border-bottom:none}
+        .ct-item.item-confirmed{background:rgba(59,130,246,.04)}
+        .ct-item.item-voided{opacity:.55}
+        .ct-item.item-combined{background:rgba(139,92,246,.04)}
+        .ct-item-info{flex:1;min-width:0}
+        .ct-item-name{font-size:13px;font-weight:700;color:var(--text);word-break:break-word}
+        .ct-item-meta{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.5}
+        .ct-item-btn{flex-shrink:0;display:flex;align-items:center}
+        .ct-item-btn .btn{font-size:11px;padding:5px 9px;min-height:0;border-radius:8px}
+        .ct-spec-badge{display:inline-block;font-size:10px;font-weight:700;border-radius:6px;padding:1px 6px;margin-bottom:3px}
+        .ct-spec-badge.moved{background:#fff7ed;color:#92400e;border:1px solid #ffd2a4}
+        .ct-spec-badge.combined{background:#f5f3ff;color:#6d28d9;border:1px solid #d8b4fe}
+        .ct-item.item-moved .ct-item-name{color:#92400e}
+        .ct-item.item-combined .ct-item-name{color:#6d28d9}
+        .ct-item-parent{font-size:10px;color:var(--muted);font-style:italic;margin-bottom:2px}
+        .ct-item-qtyhint{font-size:10px;font-weight:700;color:var(--primary,#2563eb);margin-top:2px}
+        .ct-item-ordnum{font-size:10px;color:var(--muted);margin-left:5px;font-weight:500}
+        @media(max-width:600px){#activeCards.table-view{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -542,7 +585,10 @@ $_ckBase = _computeCheckerBase();
                 <div class="panel-head">
                     <div>
                         <h2 class="panel-title">คิวครัวที่ยังค้างอยู่</h2>
-                        
+                    </div>
+                    <div class="view-toggle">
+                        <button type="button" class="view-btn active" data-view="list" title="มุมมองรายการ">📋 รายการ</button>
+                        <button type="button" class="view-btn" data-view="table" title="มุมมองโต๊ะ">🍽️ โต๊ะ</button>
                     </div>
                     <div class="panel-badge" id="queueSummary">กำลังโหลด...</div>
                 </div>
@@ -936,6 +982,8 @@ $_ckBase = _computeCheckerBase();
             checkoutQtyMode: 1,
             showOrderNumber: false
         };
+
+        const viewState = { current: localStorage.getItem('checker_view_mode') || 'list' };
 
         const barcodeCaptureState = {
             buffer: '',
@@ -2218,7 +2266,7 @@ function initSoundSettings() {
 
         function updateView() {
             renderStats(state.stats || {});
-            renderActiveRows(state.active_rows || []);
+            renderActiveView(state.active_rows || []);
             renderRecentFinished(state.recent_finished_rows || []);
             syncDrawerState();
             applyZoneFilterSync();
@@ -2301,6 +2349,170 @@ function initSoundSettings() {
             });
             return totals;
         }
+
+        // ── Table View functions ──────────────────────────────
+
+        function groupRowsByTable(rows) {
+            const map = {};
+            rows.forEach(function(row) {
+                const key = 'tbl_' + (row.TableID || 0);
+                if (!map[key]) {
+                    map[key] = {
+                        tableId: row.TableID || 0,
+                        tableName: row.DisplayTableName || String(row.TableID || '-'),
+                        rows: [],
+                        earliest: row.SubmitOrderDateTime || ''
+                    };
+                }
+                map[key].rows.push(row);
+                if (row.SubmitOrderDateTime && (!map[key].earliest || row.SubmitOrderDateTime < map[key].earliest)) {
+                    map[key].earliest = row.SubmitOrderDateTime;
+                }
+            });
+            return Object.values(map).sort(function(a, b) {
+                return a.earliest < b.earliest ? -1 : a.earliest > b.earliest ? 1 : 0;
+            });
+        }
+
+        function buildTableCard(tbl, productTotals) {
+            const now = Date.now();
+            const earliest = tbl.earliest ? new Date(tbl.earliest.replace(' ', 'T')).getTime() : now;
+            const mins = Math.floor((now - earliest) / 60000);
+            const yMin = timerThresholds.yellow || 10;
+            const rMin = timerThresholds.red || 20;
+            const warnCls = mins >= rMin ? 'warn-red' : mins >= yMin ? 'warn-yellow' : '';
+            const timeLabel = mins >= 60
+                ? Math.floor(mins / 60) + 'ชม. ' + (mins % 60) + 'น.'
+                : mins + ' นาที';
+            const confirmedCount = tbl.rows.filter(function(r) { return Number(r.ProcessStatus) === 2; }).length;
+            const subText = tbl.rows.length + ' รายการ' + (confirmedCount ? ' (ยืนยัน ' + confirmedCount + ')' : '');
+
+            const itemsHtml = tbl.rows.map(function(row) {
+                const status = Number(row.ProcessStatus);
+                const isVoided   = status === 98;
+                const isConfirmed = status === 2;
+                const isMoved    = Number(row.is_moved) === 1;
+                const isCombined = Number(row.is_combined) === 1;
+                const movedTo    = row.moved_to ? String(row.moved_to) : '';
+
+                let itemCls = 'ct-item';
+                if (isVoided)    itemCls += ' item-voided';
+                else if (isMoved) itemCls += ' item-moved';
+                else if (isCombined) itemCls += ' item-combined';
+                else if (isConfirmed) itemCls += ' item-confirmed';
+
+                let specialBadge = '';
+                if (isMoved)    specialBadge = `<div class="ct-spec-badge moved">🔀 ย้ายไปโต๊ะ ${escapeHtml(movedTo)}</div>`;
+                else if (isCombined) specialBadge = `<div class="ct-spec-badge combined">🔗 รวมโต๊ะแล้ว</div>`;
+
+                const parentLabel = row.parent_name
+                    ? `<div class="ct-item-parent">↳ ${escapeHtml(row.parent_name)}</div>` : '';
+                const setBadge = Number(row.ProductSetType) === 7 && Number(row.DisplayFlexibleAtChecker) === 1
+                    ? '<span class="set-compact-badge" style="font-size:10px;padding:1px 5px">เซ็ท</span> ' : '';
+                const orderNum = state.showOrderNumber && row.ProcessID
+                    ? `<span class="ct-item-ordnum">#${String(Number(row.ProcessID)).padStart(6,'0')}</span>` : '';
+
+                const productKey = String(row.ProductName || '').trim();
+                const totalQty   = productKey && Object.prototype.hasOwnProperty.call(productTotals, productKey)
+                    ? productTotals[productKey] : Number(row.ProductAmount || 0);
+                const qtyHint = totalQty > Number(row.ProductAmount || 0)
+                    ? `<div class="ct-item-qtyhint">รวมทั้งคิว ${formatQty(totalQty)}</div>` : '';
+
+                const commentsHtml = renderComments(row.comments || [], false);
+
+                const rowMins = row.SubmitOrderDateTime
+                    ? Math.floor((now - new Date(row.SubmitOrderDateTime.replace(' ','T')).getTime()) / 60000) : 0;
+                const metaParts = [
+                    escapeHtml(row.SaleModeName || '-'),
+                    '⏱️ ' + rowMins + ' น.'
+                ];
+                if (isConfirmed) metaParts.push('✅ กำลังทำ');
+                if (isVoided)    metaParts.push('❌ ยกเลิก');
+
+                const plid = Number(row.ProductLevelID || 0);
+                const pid  = Number(row.ProcessID || 0);
+                const spid = Number(row.SubProcessID || 0);
+                const prid = Number(row.PrinterID || 0);
+                const dis  = isSubmitting ? ' disabled' : '';
+
+                let actionBtn = '';
+                if (!isCombined) {
+                    if (isVoided) {
+                        actionBtn = `<button class="btn btn-neutral js-confirm-void" style="font-size:11px;padding:5px 8px"
+                            data-product-level-id="${plid}" data-process-id="${pid}"
+                            data-sub-process-id="${spid}" data-printer-id="${prid}"${dis}>ยืนยันยกเลิก</button>`;
+                    } else {
+                        const btnLabel = state.kdsTwoStepCheckout
+                            ? (isConfirmed ? 'Checkout' : 'ยืนยัน')
+                            : 'Checkout';
+                        const tone = warnCls === 'warn-red' ? 'dark' : 'soft';
+                        actionBtn = `<button class="btn btn-checkout-${tone} js-checkout"
+                            data-product-level-id="${plid}" data-process-id="${pid}"
+                            data-sub-process-id="${spid}" data-printer-id="${prid}"${dis}>${escapeHtml(btnLabel)}</button>`;
+                    }
+                }
+
+                return `<div class="${itemCls}">
+                    <div class="ct-item-info">
+                        ${specialBadge}
+                        ${parentLabel}
+                        <div class="ct-item-name">${setBadge}${formatQty(row.ProductAmount)}x ${escapeHtml(row.ProductName || '-')}${orderNum}</div>
+                        ${qtyHint}
+                        ${commentsHtml}
+                        <div class="ct-item-meta">${metaParts.join(' · ')}</div>
+                    </div>
+                    ${actionBtn ? `<div class="ct-item-btn">${actionBtn}</div>` : ''}
+                </div>`;
+            }).join('');
+
+            return `<article class="card-table ${warnCls}" data-table-id="${Number(tbl.tableId)}">
+                <div class="ct-head">
+                    <div>
+                        <div class="ct-name">โต๊ะ ${escapeHtml(tbl.tableName)}</div>
+                        <div class="ct-sub">${subText}</div>
+                    </div>
+                    <div class="ct-badge">⏱️ ${escapeHtml(timeLabel)}</div>
+                </div>
+                <div class="ct-items">${itemsHtml}</div>
+            </article>`;
+        }
+
+        function renderTableView(rows) {
+            const wrap = document.getElementById('activeCards');
+            wrap.classList.add('table-view');
+            document.getElementById('queueSummary').textContent = rows.length ? ('ค้าง ' + rows.length + ' แถว') : 'ไม่มีคิวค้าง';
+            if (!rows.length) {
+                wrap.innerHTML = '<div class="empty">ไม่มีรายการค้างของวันนี้ในครัว</div>';
+                return;
+            }
+            const productTotals = buildActiveProductTotals(rows);
+            const groups = groupRowsByTable(rows);
+            wrap.innerHTML = groups.map(function(tbl) {
+                return buildTableCard(tbl, productTotals);
+            }).join('');
+        }
+
+        function renderActiveView(rows) {
+            if (viewState.current === 'table') {
+                document.getElementById('activeCards').classList.add('table-view');
+                renderTableView(rows);
+            } else {
+                document.getElementById('activeCards').classList.remove('table-view');
+                renderActiveRows(rows);
+            }
+        }
+
+        function setViewMode(mode) {
+            if (mode !== 'list' && mode !== 'table') return;
+            viewState.current = mode;
+            localStorage.setItem('checker_view_mode', mode);
+            document.querySelectorAll('.view-btn').forEach(function(btn) {
+                btn.classList.toggle('active', btn.dataset.view === mode);
+            });
+            renderActiveView(state.active_rows || []);
+        }
+
+        // ── renderActiveRows (list view เดิม — ไม่แตะ) ──────
 
         function renderActiveRows(rows) {
             const wrap = document.getElementById('activeCards');
@@ -2882,7 +3094,7 @@ function initSoundSettings() {
                 state.active_rows = (state.active_rows || []).filter(function(r) {
                     return !(Number(r.ProcessID) === Number(processId) && Number(r.SubProcessID) === Number(subProcessId));
                 });
-                renderActiveRows(state.active_rows);
+                renderActiveView(state.active_rows);
                 showNotice('ยืนยันยกเลิกเรียบร้อย', 'success');
             } catch (e) {
                 showNotice(e.message || 'เกิดข้อผิดพลาด', 'error');
@@ -3359,6 +3571,12 @@ function initSoundSettings() {
                 showDbErrorState('เชื่อมต่อระบบไม่สำเร็จ กรุณาตรวจสอบเครือข่าย');
             });
         }
+
+        // ── init view toggle ──────────────────────────────────
+        document.querySelectorAll('.view-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() { setViewMode(this.dataset.view); });
+            btn.classList.toggle('active', btn.dataset.view === viewState.current);
+        });
 
         kdsStartupCheck();
 
