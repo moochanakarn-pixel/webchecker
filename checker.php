@@ -1751,8 +1751,8 @@ function initSoundSettings() {
                 return;
             }
             el.innerHTML = items.map(function(item) {
-                const id = item[idKey];
-                const name = String(item[nameKey] || '');
+                const id = Number(item[idKey] || 0);
+                const name = escapeHtml(String(item[nameKey] || ''));
                 return '<label class="filter-chip" data-id="' + id + '">' +
                     '<input type="checkbox" value="' + id + '">' + name + '</label>';
             }).join('');
@@ -1853,6 +1853,7 @@ function initSoundSettings() {
         }
 
         function closeSoldOutModal() {
+            if (window.__soldOutSearchTimer) { clearTimeout(window.__soldOutSearchTimer); window.__soldOutSearchTimer = null; }
             state.soldOutModalOpen = false;
             syncSoldOutModalState();
             focusBarcodeInput();
@@ -3087,7 +3088,7 @@ function initSoundSettings() {
                         ProcessID: processId,
                         SubProcessID: subProcessId,
                         PrinterID: printerId,
-                        finish_staff_id: currentFinishStaffId(),
+                        finish_staff_id: getFinishStaffId(),
                     }),
                 });
                 const data = await resp.json();
@@ -3824,9 +3825,11 @@ function initSoundSettings() {
         }
 
         function filterCardsByZone(zoneid) {
+            const requestedZoneId = zoneid; // capture at call time to detect stale responses
             kdsApiFetch(_kdsBase + '/api_checker.php?action=list_tables_in_zone&zoneid=' + zoneid + '&_=' + Date.now(), { cache: 'no-store' })
             .then(function(r){ return r.json(); })
             .then(function(d){
+                if (currentZoneId !== requestedZoneId) return; // stale response — newer zone selected
                 if (!d.success || !d.table_ids) { cachedZoneTableIds = null; applyZoneFilterSync(); return; }
                 cachedZoneTableIds = new Set(d.table_ids.map(Number));
                 applyZoneFilterSync(); // applies both zone AND salemode filters together
