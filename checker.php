@@ -487,9 +487,9 @@ $_ckBase = _computeCheckerBase();
 
         /* ── View Toggle ─────────────────────────────────── */
         .view-toggle{display:flex;gap:6px;align-items:center}
-        .view-btn{background:transparent;border:1.5px solid rgba(255,255,255,.5);color:#fff;border-radius:10px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap;line-height:1.3}
-        .view-btn:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.8)}
-        .view-btn.active{background:rgba(255,255,255,.3);border-color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+        .view-btn{background:#f1f5f9;border:1.5px solid #e2e8f0;color:#64748b;border-radius:10px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s,color .15s;white-space:nowrap;line-height:1.3}
+        .view-btn:hover{background:#e2e8f0;border-color:#cbd5e1;color:#334155}
+        .view-btn.active{background:#2563eb;border-color:#2563eb;color:#fff;box-shadow:0 1px 4px rgba(37,99,235,.25)}
 
         /* ── Table View — layout ─────────────────────────── */
         #activeCards.table-view{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;align-items:start}
