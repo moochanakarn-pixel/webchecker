@@ -508,8 +508,8 @@ $_ckBase = _computeCheckerBase();
 
         /* ── Table View — item list ──────────────────────── */
         .ct-items{display:flex;flex-direction:column}
-        .ct-item{display:flex;align-items:flex-start;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line)}
-        .ct-item:last-child{border-bottom:none}
+        .ct-item{display:flex;align-items:flex-start;gap:8px;padding:9px 12px;border-top:1px solid var(--line)}
+        .ct-item:first-child{border-top:none}
         .ct-item.item-confirmed{background:rgba(59,130,246,.04)}
         .ct-item.item-voided{opacity:.55}
         .ct-item.item-combined{background:rgba(139,92,246,.04)}
@@ -2510,6 +2510,7 @@ function initSoundSettings() {
                 btn.classList.toggle('active', btn.dataset.view === mode);
             });
             renderActiveView(state.active_rows || []);
+            applyZoneFilterSync(); // re-apply zone/salemode filter after view switch
         }
 
         // ── renderActiveRows (list view เดิม — ไม่แตะ) ──────
@@ -3095,6 +3096,7 @@ function initSoundSettings() {
                     return !(Number(r.ProcessID) === Number(processId) && Number(r.SubProcessID) === Number(subProcessId));
                 });
                 renderActiveView(state.active_rows);
+                applyZoneFilterSync(); // re-apply zone/salemode filter after re-render
                 showNotice('ยืนยันยกเลิกเรียบร้อย', 'success');
             } catch (e) {
                 showNotice(e.message || 'เกิดข้อผิดพลาด', 'error');
