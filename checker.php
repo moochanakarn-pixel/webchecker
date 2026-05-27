@@ -486,10 +486,10 @@ $_ckBase = _computeCheckerBase();
         .panel-head { max-height:80px; transition:opacity .35s, max-height .35s; }
 
         /* ── View Toggle ─────────────────────────────────── */
-        .view-toggle{display:flex;gap:4px;align-items:center}
-        .view-btn{background:transparent;border:1px solid rgba(255,255,255,.45);color:#fff;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap}
-        .view-btn:hover{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.7)}
-        .view-btn.active{background:rgba(255,255,255,.28);border-color:#fff}
+        .view-toggle{display:flex;gap:6px;align-items:center}
+        .view-btn{background:transparent;border:1.5px solid rgba(255,255,255,.5);color:#fff;border-radius:10px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap;line-height:1.3}
+        .view-btn:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.8)}
+        .view-btn.active{background:rgba(255,255,255,.3);border-color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15)}
 
         /* ── Table View — layout ─────────────────────────── */
         #activeCards.table-view{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;align-items:start}
