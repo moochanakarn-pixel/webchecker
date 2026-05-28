@@ -1419,7 +1419,7 @@ function normalizeCommentRow($row)
 
 function commentTypeLabel($type)
 {
-    return ((int)$type === 15) ? 'คอมเมนต์เพิ่มราคา' : 'คอมเมนต์';
+    return ((int)$type === 15) ? 'เพิ่มราคา' : 'คอมเมนต์';
 }
 
 function getKdsAllCommentSql()

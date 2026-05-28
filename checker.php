@@ -2304,7 +2304,7 @@ function initSoundSettings() {
                 if (pricedItems.length) {
                     blocks.push(`
                         <div class="comment-group priced">
-                            <span class="comment-group-label">คอมเมนต์เพิ่มราคา</span>
+                            <span class="comment-group-label">เพิ่มราคา</span>
                             <span class="comment-group-items">${pricedItems.join(', ')}</span>
                         </div>
                     `);
@@ -2317,7 +2317,7 @@ function initSoundSettings() {
                 lines.push(`<div class="comment-inline"><span class="label">คอมเมนต์:</span>${normalItems.join(', ')}</div>`);
             }
             if (pricedItems.length) {
-                lines.push(`<div class="comment-inline priced"><span class="label">คอมเมนต์เพิ่มราคา:</span>${pricedItems.join(', ')}</div>`);
+                lines.push(`<div class="comment-inline priced"><span class="label">เพิ่มราคา:</span>${pricedItems.join(', ')}</div>`);
             }
             return lines.length ? `<div class="product-comments-inline">${lines.join('')}</div>` : '';
         }
