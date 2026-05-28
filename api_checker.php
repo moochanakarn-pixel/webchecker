@@ -1647,6 +1647,7 @@ function confirmVoid($conn)
         if (!$row) {
             // อาจถูกยืนยันไปแล้วโดย staff คนอื่น — idempotent success
             $conn->rollback();
+            writeActivityLog('CONFIRM_VOID_SKIP', 'Already confirmed Process:' . $processId, $finishStaffId);
             jsonResponse(array('success' => true, 'message' => 'ยืนยันยกเลิกเรียบร้อย'));
         }
 

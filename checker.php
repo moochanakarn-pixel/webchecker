@@ -2360,7 +2360,7 @@ function initSoundSettings() {
                 } else if (pid > 0) {
                     key = 'bill_' + pid;
                 } else {
-                    key = 'item_' + Number(row.ProductLevelID || idx);
+                    key = 'item_' + idx;
                 }
                 if (!map[key]) {
                     map[key] = {
@@ -3783,8 +3783,9 @@ function initSoundSettings() {
             .then(function(r){ return r.json(); })
             .then(function(d){
                 if (currentZoneId !== requestedZoneId) return; // stale response — newer zone selected
-                if (!d.success || !d.table_ids) { cachedZoneTableIds = null; applyZoneFilterSync(); return; }
+                if (!d.success || !d.table_ids) { cachedZoneTableIds = null; zoneReady = true; applyZoneFilterSync(); return; }
                 cachedZoneTableIds = new Set(d.table_ids.map(Number));
+                zoneReady = true;
                 applyZoneFilterSync(); // applies both zone AND salemode filters together
             }).catch(function(e){ console.warn('zone filter error', e); });
         }
@@ -3843,6 +3844,7 @@ function initSoundSettings() {
                     b.classList.toggle('btn-neutral', parseInt(b.dataset.zoneid) !== 0);
                 });
                 cachedZoneTableIds = null;
+                zoneReady = true;
                 applyZoneFilterSync();
             });
         }
