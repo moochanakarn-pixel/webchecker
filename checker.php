@@ -2339,14 +2339,15 @@ function initSoundSettings() {
 
         function groupRowsByTable(rows) {
             const map = {};
-            let noTableSeq = 0;
             rows.forEach(function(row) {
-                const hasTable = row.TableID !== null && row.TableID !== undefined && Number(row.TableID) > 0;
-                const key = hasTable ? 'tbl_' + Number(row.TableID) : 'notbl_' + (noTableSeq++);
+                const key = 'proc_' + Number(row.ProcessID || 0);
                 if (!map[key]) {
+                    const hasTable = row.TableID !== null && row.TableID !== undefined && Number(row.TableID) > 0;
                     map[key] = {
                         tableId: hasTable ? Number(row.TableID) : 0,
                         tableName: row.DisplayTableName || (hasTable ? String(row.TableID) : '-'),
+                        processId: Number(row.ProcessID || 0),
+                        saleModeName: row.SaleModeName || '',
                         rows: [],
                         earliest: row.SubmitOrderDateTime || ''
                     };
@@ -2452,13 +2453,18 @@ function initSoundSettings() {
                 </div>`;
             }).join('');
 
-            return `<article class="card-table ${warnCls}" data-table-id="${Number(tbl.tableId)}">
+            const hasTable = tbl.tableName && tbl.tableName !== '0' && tbl.tableName !== '-';
+            const primaryLabel = hasTable ? 'โต๊ะ ' + escapeHtml(tbl.tableName) : escapeHtml(tbl.saleModeName || 'ออเดอร์');
+            const billNum = '#' + String(tbl.processId).padStart(6, '0');
+            const subLine = (hasTable && tbl.saleModeName ? escapeHtml(tbl.saleModeName) + ' · ' : '') + billNum + ' · ' + subText;
+
+            return `<article class="card-table ${warnCls}" data-table-id="${Number(tbl.tableId)}" data-process-id="${tbl.processId}">
                 <div class="ct-head">
                     <div>
-                        <div class="ct-name">โต๊ะ ${escapeHtml(tbl.tableName)}</div>
-                        <div class="ct-sub">${subText}</div>
+                        <div class="ct-name">${primaryLabel}</div>
+                        <div class="ct-sub">${subLine}</div>
                     </div>
-                    <div class="ct-badge">⏱️ ${escapeHtml(timeLabel)}</div>
+                    <div class="ct-badge">${escapeHtml(timeLabel)}</div>
                 </div>
                 <div class="ct-items">${itemsHtml}</div>
             </article>`;
