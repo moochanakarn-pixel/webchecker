@@ -544,18 +544,18 @@ $_ckBase = _computeCheckerBase();
                     <span id="topStaffNameLabel" style="font-size:13px;font-weight:bold;color:#fff;background:rgba(0,0,0,.18);padding:4px 10px;border-radius:8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
                     <button type="button" class="btn btn-ghost" id="topStaffLogoutBtn" style="min-height:36px;padding:0 10px;font-size:13px">ออกจากระบบ</button>
                 </div>
-                <button type="button" class="btn btn-accent" id="openSystemSettingsBtn" style="display:none">⚙️ ตั้งค่าระบบ</button>
-                <button type="button" class="btn btn-neutral" id="openSoldOutBtn">🥫 ปิดสินค้าหมด</button>
+                <button type="button" class="btn btn-accent" id="openSystemSettingsBtn" style="display:none">ตั้งค่าระบบ</button>
+                <button type="button" class="btn btn-neutral" id="openSoldOutBtn">ปิดสินค้าหมด</button>
                 <div class="barcode-tools" id="barcodeTools">
                     <div class="field-card field-card-barcode">
                         <label for="barcodeInput">สแกนบาร์โค้ด</label>
                         <input type="text" id="barcodeInput" inputmode="numeric" autocomplete="off" placeholder="ยิงบาร์โค้ดแล้วเช็คเอาต์ทันที">
                     </div>
-                    <button type="button" class="btn btn-neutral" id="openBarcodeCameraBtn">📷 สแกนกล้อง</button>
+                    <button type="button" class="btn btn-neutral" id="openBarcodeCameraBtn">สแกนกล้อง</button>
                 </div>
-                <button type="button" class="btn btn-neutral" id="openZoneBtn">📍 กรอง: <span id="zoneLabel">ทั้งหมด</span></button>
-                <button type="button" class="btn btn-ghost js-open-finished" id="openFinishedBtn">✅ เสร็จแล้ว <span id="topFinishedCount">0</span></button>
-                <button type="button" class="btn btn-primary" id="refreshBtn">🔄 รีเฟรช</button>
+                <button type="button" class="btn btn-neutral" id="openZoneBtn">กรองโซน: <span id="zoneLabel">ทั้งหมด</span></button>
+                <button type="button" class="btn btn-ghost js-open-finished" id="openFinishedBtn">เสร็จแล้ว <span id="topFinishedCount">0</span></button>
+                <button type="button" class="btn btn-primary" id="refreshBtn">รีเฟรช</button>
                 <button type="button" class="btn-fullscreen" id="fsBtn" title="เต็มจอ">
                     <svg class="fs-ico-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
                     <svg class="fs-ico-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="display:none"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
@@ -587,8 +587,8 @@ $_ckBase = _computeCheckerBase();
                         <h2 class="panel-title">คิวครัวที่ยังค้างอยู่</h2>
                     </div>
                     <div class="view-toggle">
-                        <button type="button" class="view-btn active" data-view="list" title="มุมมองรายการ">📋 รายการ</button>
-                        <button type="button" class="view-btn" data-view="table" title="มุมมองโต๊ะ">🍽️ โต๊ะ</button>
+                        <button type="button" class="view-btn active" data-view="list" title="มุมมองรายการ">รายการ</button>
+                        <button type="button" class="view-btn" data-view="table" title="มุมมองโต๊ะ">โต๊ะ</button>
                     </div>
                     <div class="panel-badge" id="queueSummary">กำลังโหลด...</div>
                 </div>
@@ -3674,7 +3674,7 @@ function initSoundSettings() {
                         btn.className = 'btn btn-neutral zone-item';
                         btn.dataset.zoneid = z.zoneid;
                         btn.style.cssText = 'width:100%;text-align:left;padding:10px 14px;border-radius:10px;font-size:14px';
-                        btn.textContent = '📍 ' + z.zonename;
+                        btn.textContent = z.zonename;
                         zoneList.appendChild(btn);
                     });
                     if (currentZoneId > 0 && zoneLabel) {
@@ -3807,7 +3807,7 @@ function initSoundSettings() {
                 const btn = e.target.closest('.zone-item');
                 if (!btn) return;
                 currentZoneId   = parseInt(btn.dataset.zoneid);
-                currentZoneName = currentZoneId === 0 ? 'ทั้งหมด' : btn.textContent.replace('📍 ', '').trim();
+                currentZoneName = currentZoneId === 0 ? 'ทั้งหมด' : btn.textContent.trim();
                 localStorage.setItem('checker_zone_id', String(currentZoneId));
                 localStorage.setItem('checker_zone_name', currentZoneName);
                 kdsLogActivity('ZONE_CHANGE', 'Zone:' + currentZoneName + '(' + currentZoneId + ')', Number(localStorage.getItem('checker_finish_staff_id') || 0));
