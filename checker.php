@@ -2339,12 +2339,14 @@ function initSoundSettings() {
 
         function groupRowsByTable(rows) {
             const map = {};
+            let noTableSeq = 0;
             rows.forEach(function(row) {
-                const key = 'tbl_' + (row.TableID || 0);
+                const hasTable = row.TableID !== null && row.TableID !== undefined && Number(row.TableID) > 0;
+                const key = hasTable ? 'tbl_' + Number(row.TableID) : 'notbl_' + (noTableSeq++);
                 if (!map[key]) {
                     map[key] = {
-                        tableId: row.TableID || 0,
-                        tableName: row.DisplayTableName || String(row.TableID || '-'),
+                        tableId: hasTable ? Number(row.TableID) : 0,
+                        tableName: row.DisplayTableName || (hasTable ? String(row.TableID) : '-'),
                         rows: [],
                         earliest: row.SubmitOrderDateTime || ''
                     };
@@ -2406,10 +2408,10 @@ function initSoundSettings() {
                 const commentsHtml = renderComments(row.comments || [], false);
 
                 const rowMins = row.SubmitOrderDateTime
-                    ? Math.floor((now - new Date(row.SubmitOrderDateTime.replace(' ','T')).getTime()) / 60000) : 0;
+                    ? Math.floor((now - new Date(row.SubmitOrderDateTime.replace(' ','T')).getTime()) / 60000) : null;
                 const metaParts = [
                     escapeHtml(row.SaleModeName || '-'),
-                    '⏱️ ' + rowMins + ' น.'
+                    rowMins !== null ? '⏱️ ' + rowMins + ' น.' : '⏱️ -'
                 ];
                 if (isConfirmed) metaParts.push('✅ กำลังทำ');
                 if (isVoided)    metaParts.push('❌ ยกเลิก');
@@ -2465,13 +2467,14 @@ function initSoundSettings() {
         function renderTableView(rows) {
             const wrap = document.getElementById('activeCards');
             wrap.classList.add('table-view');
-            document.getElementById('queueSummary').textContent = rows.length ? ('ค้าง ' + rows.length + ' แถว') : 'ไม่มีคิวค้าง';
             if (!rows.length) {
+                document.getElementById('queueSummary').textContent = 'ไม่มีคิวค้าง';
                 wrap.innerHTML = '<div class="empty">ไม่มีรายการค้างของวันนี้ในครัว</div>';
                 return;
             }
             const productTotals = buildActiveProductTotals(rows);
             const groups = groupRowsByTable(rows);
+            document.getElementById('queueSummary').textContent = 'ค้าง ' + groups.length + ' โต๊ะ';
             wrap.innerHTML = groups.map(function(tbl) {
                 return buildTableCard(tbl, productTotals);
             }).join('');
@@ -3077,7 +3080,10 @@ function initSoundSettings() {
                 const data = await resp.json();
                 if (!data.success) throw new Error(data.error || 'เกิดข้อผิดพลาด');
                 state.active_rows = (state.active_rows || []).filter(function(r) {
-                    return !(Number(r.ProcessID) === Number(processId) && Number(r.SubProcessID) === Number(subProcessId));
+                    return !(Number(r.ProductLevelID) === Number(productLevelId) &&
+                             Number(r.ProcessID) === Number(processId) &&
+                             Number(r.SubProcessID) === Number(subProcessId) &&
+                             Number(r.PrinterID) === Number(printerId));
                 });
                 renderActiveView(state.active_rows);
                 applyZoneFilterSync(); // re-apply zone/salemode filter after re-render
