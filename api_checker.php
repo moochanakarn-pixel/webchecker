@@ -11,6 +11,18 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// กัน fatal error หลุดเป็น HTML — ob_start ไม่ครอบ E_ERROR
+register_shutdown_function(function() {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        while (ob_get_level()) ob_end_clean();
+        http_response_code(200);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => false, 'error' => 'Server error'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+});
+
 // กัน HTML หลุดเป็น response — ต้องทำก่อน require
 set_error_handler(function($errno, $errstr, $errfile, $errline) {
     // log เงียบๆ
@@ -192,8 +204,8 @@ function validateSystemSettingsPayload($settings)
     if ($settings['threshold_red'] <= 0) {
         $errors[] = 'เวลาแจ้งเตือนสีแดงต้องมากกว่า 0';
     }
-    if ($settings['threshold_red'] < $settings['threshold_yellow']) {
-        $errors[] = 'เวลาแจ้งเตือนสีแดงต้องมากกว่าหรือเท่ากับสีเหลือง';
+    if ($settings['threshold_red'] <= $settings['threshold_yellow']) {
+        $errors[] = 'เวลาแจ้งเตือนสีแดงต้องมากกว่าสีเหลือง';
     }
     return $errors;
 }
@@ -954,11 +966,14 @@ function appendSaleModeZoneFilter(array &$where, array $saleModeIds, array $zone
     $hasSaleMode = !empty($saleModeIds);
     $hasZone     = !empty($zoneIds);
 
+    $safeZones = implode(',', array_map('intval', array_filter($zoneIds, fn($v) => (int)$v > 0)));
+    $safeModes = implode(',', array_map('intval', array_filter($saleModeIds, fn($v) => (int)$v > 0)));
+    $hasZone     = $safeZones !== '';
+    $hasSaleMode = $safeModes !== '';
+
     if ($hasZone && $hasSaleMode) {
         // ทั้งคู่: โต๊ะในโซน = ผ่านเสมอ, TableID=0 = กรองด้วย SaleMode
         $needZoneJoin = true;
-        $safeZones = implode(',', array_map('intval', $zoneIds));
-        $safeModes = implode(',', array_map('intval', $saleModeIds));
         $where[] = "(" .
             "(opf.TableID > 0 AND tn.ZoneID IN ({$safeZones}))" .
             " OR " .
@@ -967,11 +982,9 @@ function appendSaleModeZoneFilter(array &$where, array $saleModeIds, array $zone
     } elseif ($hasZone) {
         // แค่ zone: TableID=0 ผ่านเสมอ
         $needZoneJoin = true;
-        $safeZones = implode(',', array_map('intval', $zoneIds));
         $where[] = "(opf.TableID = 0 OR tn.ZoneID IN ({$safeZones}))";
     } elseif ($hasSaleMode) {
         // แค่ SaleMode: กรองทุก order ไม่ว่ามีโต๊ะหรือไม่
-        $safeModes = implode(',', array_map('intval', $saleModeIds));
         $where[] = "opf.SaleModeID IN ({$safeModes})";
     }
 }
@@ -1629,7 +1642,9 @@ function confirmVoid($conn)
     try {
         $row = fetchLockedProcessRow($conn, $productLevelId, $processId, $subProcessId, $printerId, array(PROCESS_STATUS_VOIDED));
         if (!$row) {
-            throw new Exception('ไม่พบรายการที่ถูกยกเลิก หรือยืนยันไปแล้ว');
+            // อาจถูกยืนยันไปแล้วโดย staff คนอื่น — idempotent success
+            $conn->rollback();
+            jsonResponse(array('success' => true, 'message' => 'ยืนยันยกเลิกเรียบร้อย'));
         }
 
         $now             = date('Y-m-d H:i:s');

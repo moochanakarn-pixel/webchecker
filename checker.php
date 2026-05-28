@@ -3339,34 +3339,37 @@ function initSoundSettings() {
         document.addEventListener('click', function(event) {
             const checkoutBtn = event.target.closest('.js-checkout');
             if (checkoutBtn) {
+                checkoutBtn.disabled = true;
                 checkoutOne(
                     checkoutBtn.dataset.productLevelId,
                     checkoutBtn.dataset.processId,
                     checkoutBtn.dataset.subProcessId,
                     checkoutBtn.dataset.printerId
-                );
+                ).finally(function() { checkoutBtn.disabled = false; });
                 return;
             }
 
             const confirmVoidBtn = event.target.closest('.js-confirm-void');
             if (confirmVoidBtn) {
+                confirmVoidBtn.disabled = true;
                 confirmVoid(
                     confirmVoidBtn.dataset.productLevelId,
                     confirmVoidBtn.dataset.processId,
                     confirmVoidBtn.dataset.subProcessId,
                     confirmVoidBtn.dataset.printerId
-                );
+                ).finally(function() { confirmVoidBtn.disabled = false; });
                 return;
             }
 
             const undoBtn = event.target.closest('.js-undo');
             if (undoBtn) {
+                undoBtn.disabled = true;
                 undoOne(
                     undoBtn.dataset.productLevelId,
                     undoBtn.dataset.processId,
                     undoBtn.dataset.subProcessId,
                     undoBtn.dataset.printerId
-                );
+                ).finally(function() { undoBtn.disabled = false; });
                 return;
             }
 
@@ -3630,8 +3633,10 @@ function initSoundSettings() {
     // ── Zone + SaleMode Combined Filter ─────────────────
         let cachedZoneTableIds = null;      // null = ทั้งหมด
         let selectedSaleModeIds = new Set(); // empty = ทั้งหมด
+        let zoneReady = false;
 
         function applyZoneFilterSync() {
+            if (!zoneReady) return;
             // list-view cards (exclude card-table which have their own loop below)
             document.querySelectorAll('article[data-table-id]:not(.card-table)').forEach(function(el) {
                 const tid  = parseInt(el.dataset.tableId || '0');
@@ -3700,6 +3705,8 @@ function initSoundSettings() {
                     }
                 }
             } catch(e) { console.warn('load zones error', e); }
+            zoneReady = true;
+            applyZoneFilterSync();
         }
 
         // ── load sale modes (checkboxes) ─────────────────
