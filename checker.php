@@ -486,7 +486,8 @@ $_ckBase = _computeCheckerBase();
         .panel-head { max-height:80px; transition:opacity .35s, max-height .35s; }
 
         /* ── View Toggle ─────────────────────────────────── */
-        .view-toggle{display:flex;gap:6px;align-items:center}
+        .view-toggle{display:none;gap:6px;align-items:center}
+        .view-toggle.enabled{display:flex}
         .view-btn{background:#f1f5f9;border:1.5px solid #e2e8f0;color:#64748b;border-radius:10px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s,color .15s;white-space:nowrap;line-height:1.3}
         .view-btn:hover{background:#e2e8f0;border-color:#cbd5e1;color:#334155}
         .view-btn.active{background:#2563eb;border-color:#2563eb;color:#fff;box-shadow:0 1px 4px rgba(37,99,235,.25)}
@@ -786,6 +787,13 @@ $_ckBase = _computeCheckerBase();
                             <div class="setting-check-sub">ใช้สำหรับเปิดกล้องบนมือถือเพื่อสแกนบาร์โค้ด และเมื่อสแกนเจอจะปิดกล้องให้อัตโนมัติ</div>
                         </div>
                         <input type="checkbox" id="barcodeCameraEnabled">
+                    </label>
+                    <label class="setting-check">
+                        <div>
+                            <div class="setting-check-title">มุมมองโต๊ะ</div>
+                            <div class="setting-check-sub">แสดงปุ่มสลับระหว่าง มุมมองรายการ / มุมมองโต๊ะ บนแถบเครื่องมือ</div>
+                        </div>
+                        <input type="checkbox" id="tableViewEnabled">
                     </label>
                     <label class="setting-check">
                         <div>
@@ -2008,6 +2016,8 @@ function initSoundSettings() {
             if (activeRowsTodayInput) activeRowsTodayInput.checked = Number(settings.active_rows_today_only ?? 1) === 1;
             const showOrderNumberInput = document.getElementById('showOrderNumber');
             if (showOrderNumberInput) showOrderNumberInput.checked = Number(settings.show_order_number || 0) === 1;
+            const tableViewInput = document.getElementById('tableViewEnabled');
+            if (tableViewInput) tableViewInput.checked = Number(settings.table_view_enabled || 0) === 1;
             const barcodeScanVisibleInput = document.getElementById('barcodeScanVisible');
             if (barcodeScanVisibleInput) barcodeScanVisibleInput.checked = getBarcodeVisible();
             const cameraEnabledInput = document.getElementById('barcodeCameraEnabled');
@@ -2047,6 +2057,7 @@ function initSoundSettings() {
                 void_confirm_mode: (document.getElementById('voidConfirmMode') || {}).checked ? 1 : 0,
                 active_rows_today_only: (document.getElementById('activeRowsTodayOnly') || {}).checked ? 1 : 0,
                 show_order_number: (document.getElementById('showOrderNumber') || {}).checked ? 1 : 0,
+                table_view_enabled: (document.getElementById('tableViewEnabled') || {}).checked ? 1 : 0,
                 checkout_qty_mode: Number((document.querySelector('input[name="checkoutQtyMode"]:checked') || {value: 1}).value || 1),
                 allowed_sale_mode_ids: state.saleModeChipsReady ? getFilterChipValues('saleModeFilterChips') : ((state.currentSystemSettings && state.currentSystemSettings.allowed_sale_mode_ids) || []),
                 allowed_zone_ids: state.zoneChipsReady ? getFilterChipValues('zoneFilterChips') : ((state.currentSystemSettings && state.currentSystemSettings.allowed_zone_ids) || []),
@@ -2144,6 +2155,7 @@ function initSoundSettings() {
             state.kdsTwoStepCheckout = !!payload.kds_two_step_checkout;
             state.checkoutQtyMode = Number(payload.checkout_qty_mode || 1);
             state.showOrderNumber = Number(payload.show_order_number || 0) === 1;
+            applyTableViewEnabled(Number(payload.table_view_enabled || 0) === 1);
             applyBarcodeCameraAvailability();
             applyOutOfStockEnabled(payload.out_of_stock_enabled !== 0);
             applyStaffLoginMode(payload.hide_staff_login === 1);
@@ -3484,6 +3496,7 @@ function initSoundSettings() {
                 if (!d.success) { showDbErrorState('การตั้งค่าระบบไม่สมบูรณ์'); return; }
                 applyOutOfStockEnabled(d.settings.out_of_stock_enabled !== 0);
                 applyStaffLoginMode(Number(d.settings.hide_staff_login || 0) === 1);
+                applyTableViewEnabled(Number(d.settings.table_view_enabled || 0) === 1);
                 state.checkoutQtyMode = Number(d.settings.checkout_qty_mode || 1);
                 state.showOrderNumber = Number(d.settings.show_order_number || 0) === 1;
                 var dbOk = (d.connection_message === 'เชื่อมต่อฐานข้อมูลปัจจุบันได้');
@@ -3667,6 +3680,15 @@ function initSoundSettings() {
         const btn = document.getElementById('openSoldOutBtn');
         if (!btn) return;
         btn.style.display = enabled ? '' : 'none';
+    };
+
+    function applyTableViewEnabled(enabled) {
+        const toggle = document.querySelector('.view-toggle');
+        if (!toggle) return;
+        toggle.classList.toggle('enabled', !!enabled);
+        if (!enabled) {
+            setViewMode('list');
+        }
     };
 
     (function(){
