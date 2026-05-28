@@ -2339,14 +2339,22 @@ function initSoundSettings() {
 
         function groupRowsByTable(rows) {
             const map = {};
-            rows.forEach(function(row) {
-                const key = 'proc_' + Number(row.ProcessID || 0);
+            rows.forEach(function(row, idx) {
+                const tid = row.TableID !== null && row.TableID !== undefined ? Number(row.TableID) : 0;
+                const pid = Number(row.ProcessID || 0);
+                let key;
+                if (tid > 0) {
+                    key = 'tbl_' + tid;
+                } else if (pid > 0) {
+                    key = 'bill_' + pid;
+                } else {
+                    key = 'item_' + Number(row.ProductLevelID || idx);
+                }
                 if (!map[key]) {
-                    const hasTable = row.TableID !== null && row.TableID !== undefined && Number(row.TableID) > 0;
                     map[key] = {
-                        tableId: hasTable ? Number(row.TableID) : 0,
-                        tableName: row.DisplayTableName || (hasTable ? String(row.TableID) : '-'),
-                        processId: Number(row.ProcessID || 0),
+                        tableId: tid,
+                        tableName: row.DisplayTableName || (tid > 0 ? String(tid) : '-'),
+                        processId: pid,
                         saleModeName: row.SaleModeName || '',
                         rows: [],
                         earliest: row.SubmitOrderDateTime || ''
@@ -2453,12 +2461,15 @@ function initSoundSettings() {
                 </div>`;
             }).join('');
 
-            const hasTable = tbl.tableName && tbl.tableName !== '0' && tbl.tableName !== '-';
+            const hasTable = tbl.tableId > 0;
             const primaryLabel = hasTable ? 'โต๊ะ ' + escapeHtml(tbl.tableName) : escapeHtml(tbl.saleModeName || 'ออเดอร์');
-            const billNum = '#' + String(tbl.processId).padStart(6, '0');
-            const subLine = (hasTable && tbl.saleModeName ? escapeHtml(tbl.saleModeName) + ' · ' : '') + billNum + ' · ' + subText;
+            const subLineParts = [];
+            if (hasTable && tbl.saleModeName) subLineParts.push(escapeHtml(tbl.saleModeName));
+            if (!hasTable && tbl.processId > 0) subLineParts.push('#' + String(tbl.processId).padStart(6, '0'));
+            subLineParts.push(subText);
+            const subLine = subLineParts.join(' · ');
 
-            return `<article class="card-table ${warnCls}" data-table-id="${Number(tbl.tableId)}" data-process-id="${tbl.processId}">
+            return `<article class="card-table ${warnCls}" data-table-id="${tbl.tableId}">
                 <div class="ct-head">
                     <div>
                         <div class="ct-name">${primaryLabel}</div>
@@ -2480,7 +2491,7 @@ function initSoundSettings() {
             }
             const productTotals = buildActiveProductTotals(rows);
             const groups = groupRowsByTable(rows);
-            document.getElementById('queueSummary').textContent = 'ค้าง ' + groups.length + ' โต๊ะ';
+            document.getElementById('queueSummary').textContent = 'ค้าง ' + groups.length + ' การ์ด';
             wrap.innerHTML = groups.map(function(tbl) {
                 return buildTableCard(tbl, productTotals);
             }).join('');
@@ -3632,7 +3643,7 @@ function initSoundSettings() {
             // table-view: filter items, hide card if all items hidden
             document.querySelectorAll('article.card-table').forEach(function(card) {
                 const tid = parseInt(card.dataset.tableId || '0');
-                const zoneOk = cachedZoneTableIds === null || cachedZoneTableIds.has(tid);
+                const zoneOk = cachedZoneTableIds === null || tid === 0 || cachedZoneTableIds.has(tid);
                 if (!zoneOk) { card.style.display = 'none'; return; }
                 const items = card.querySelectorAll('.ct-item[data-sale-mode-id]');
                 if (!items.length) { card.style.display = ''; return; }
