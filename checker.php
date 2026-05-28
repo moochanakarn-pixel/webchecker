@@ -1039,14 +1039,6 @@ $_ckBase = _computeCheckerBase();
             btn.textContent = '🔄 สลับเป็น' + getBarcodeFacingLabel(next);
         }
 
-        function getBarcodeAutoSubmitEnabled() {
-            return true;
-        }
-
-        function saveBarcodeAutoSubmit(value) {
-            return true;
-        }
-
         function getBarcodeCameraEnabled() {
             const raw = localStorage.getItem(getBarcodeCameraEnabledStorageKey());
             if (raw === null) return barcodeCameraEnabledDefault;
@@ -1104,10 +1096,6 @@ $_ckBase = _computeCheckerBase();
             const tag = (el.tagName || '').toUpperCase();
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
             return !!el.isContentEditable;
-        }
-
-        function setBarcodeReadyHint(message, variant) {
-            return;
         }
 
         function applyScannedBarcodeValue(value, shouldSubmit, keepFocus) {
@@ -1736,7 +1724,6 @@ function initSoundSettings() {
                     populateShopDropdown(shopsData.shops, Number((data.settings || {}).shop_id || 0));
                 }
                 applySystemSettingsToModal(data.settings || {}, data.staff_name || '', data.connection_message || '');
-                state.systemSettingsLoaded = true;
                 state.currentSystemSettings = data.settings || {};
             } catch (error) {
                 showSystemSettingsStatus(error.message || 'โหลดค่าระบบไม่สำเร็จ', 'error');
@@ -2272,9 +2259,6 @@ function initSoundSettings() {
             syncDrawerState();
             applyZoneFilterSync();
         }
-        function renderFilterInfo() {
-        }
-
         function renderStats(stats) {
             document.getElementById('statActiveRows').textContent = Number(stats.active_rows || 0);
             document.getElementById('statActiveQty').textContent = formatQty(stats.active_qty || 0);
@@ -3064,7 +3048,6 @@ function initSoundSettings() {
                 focusBarcodeInput();
             } catch (error) {
                 setStatusText('เกิดข้อผิดพลาด');
-                setBarcodeReadyHint('ไม่พบบาร์โค้ด', 'error');
                 clearBarcodeInput();
                 feedbackError();
                 showNotice(error.message || 'Barcode not found', 'error');
@@ -3103,60 +3086,6 @@ function initSoundSettings() {
                 showNotice(e.message || 'เกิดข้อผิดพลาด', 'error');
             } finally {
                 isSubmitting = false;
-            }
-        }
-
-        async function resolveStatus(productLevelId, processId, subProcessId, printerId) {
-            if (isSubmitting) return;
-            if (!staffIsLoggedIn) { showNotice('กรุณาเข้าสู่ระบบก่อน', 'error'); return; }
-            const clickedRow = findActiveRow(productLevelId, processId, subProcessId, printerId);
-            if (!clickedRow) {
-                await loadActiveRows();
-                return;
-            }
-
-            isSubmitting = true;
-            setStatusText('กำลังจบสถานะ...');
-
-            try {
-                const params = new URLSearchParams();
-                params.set('action', 'resolve_status');
-                params.set('ProductLevelID', productLevelId);
-                params.set('ProcessID', processId);
-                params.set('SubProcessID', subProcessId);
-                params.set('PrinterID', printerId);
-                params.set('finish_staff_id', getFinishStaffId());
-
-                const response = await kdsApiFetch(_kdsBase + '/api_checker.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
-                    body: params.toString()
-                }, 20000);
-                const data = await response.json();
-                if (!response.ok || !data.success) {
-                    throw new Error(data.error || 'จบสถานะไม่สำเร็จ');
-                }
-
-                state.active_rows = (state.active_rows || []).filter(function(item) {
-                    return !(Number(item.ProductLevelID) === Number(productLevelId)
-                        && Number(item.ProcessID) === Number(processId)
-                        && Number(item.SubProcessID) === Number(subProcessId)
-                        && Number(item.PrinterID) === Number(printerId));
-                });
-                state.stats.active_rows = Math.max(0, Number(state.stats.active_rows || 0) - 1);
-                state.stats.active_qty = Math.max(0, Number(state.stats.active_qty || 0) - Number(clickedRow.ProductAmount || 0));
-
-                showNotice(data.message || 'จบสถานะสำเร็จ', 'success');
-                setStatusText('อัปเดตแล้ว');
-                updateView();
-                setTimeout(loadActiveRows, 120);
-            } catch (error) {
-                setStatusText('เกิดข้อผิดพลาด');
-                showNotice(error.message || 'จบสถานะไม่สำเร็จ', 'error');
-                await loadAll();
-            } finally {
-                isSubmitting = false;
-                updateView();
             }
         }
 
@@ -3254,25 +3183,12 @@ function initSoundSettings() {
             });
         }
 
-        function formatDate(value) {
-            if (!value) return '-';
-            const dt = new Date(String(value));
-            if (Number.isNaN(dt.getTime())) return String(value);
-            return dt.toLocaleDateString('th-TH', {
-                year: 'numeric', month: '2-digit', day: '2-digit'
-            });
-        }
-
         function getMinutesDiff(value) {
             if (!value) return 0;
             const safe = String(value).replace(' ', 'T');
             const dt = new Date(safe);
             if (Number.isNaN(dt.getTime())) return 0;
             return Math.max(0, Math.floor((Date.now() - dt.getTime()) / 60000));
-        }
-
-        function jsEscape(value) {
-            return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         }
 
         function escapeHtml(value) {
@@ -3282,10 +3198,6 @@ function initSoundSettings() {
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
-        }
-
-        function escapeAttribute(value) {
-            return escapeHtml(value).replace(/`/g, '&#096;');
         }
 
         document.getElementById('refreshBtn').addEventListener('click', loadAll);
@@ -3329,7 +3241,7 @@ function initSoundSettings() {
                 barcodeCaptureState.awaitingFreshScan = !barcodeCaptureState.buffer;
             });
             barcodeInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' && getBarcodeAutoSubmitEnabled()) {
+                if (e.key === 'Enter') {
                     e.preventDefault();
                     e.stopPropagation();
                     checkoutBarcode();
@@ -3424,17 +3336,6 @@ function initSoundSettings() {
                 return;
             }
 
-            const resolveBtn = event.target.closest('.js-resolve-status');
-            if (resolveBtn) {
-                resolveStatus(
-                    resolveBtn.dataset.productLevelId,
-                    resolveBtn.dataset.processId,
-                    resolveBtn.dataset.subProcessId,
-                    resolveBtn.dataset.printerId
-                );
-                return;
-            }
-
             const undoBtn = event.target.closest('.js-undo');
             if (undoBtn) {
                 undoOne(
@@ -3484,7 +3385,7 @@ function initSoundSettings() {
 
             if (event.key === 'Enter') {
                 const input = document.getElementById('barcodeInput');
-                if (getBarcodeAutoSubmitEnabled() && input && String(input.value || '').trim()) {
+                if (input && String(input.value || '').trim()) {
                     event.preventDefault();
                     checkoutBarcode();
                 }

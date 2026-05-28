@@ -726,20 +726,12 @@ try {
         undoOne($conn);
     }
 
-    if ($method === 'POST' && $action === 'resolve_status') {
-        resolveStatus($conn);
-    }
-
     if ($method === 'GET' && $action === 'list_active') {
         listActiveData($conn);
     }
 
     if ($method === 'GET' && $action === 'list_finished') {
         listFinishedData($conn);
-    }
-
-    if ($method === 'GET' && $action === 'list_print_server_printers') {
-        listPrintServerPrinters();
     }
 
     if ($method === 'GET' && $action === 'list_out_of_stock_products') {
@@ -778,7 +770,6 @@ function listData($conn)
     if (!VOID_CONFIRM_MODE) {
         autoConfirmVoids($conn);
     }
-    $overridePrintServerUrl = requestString('print_server_url', '');
     $activeRows = fetchActiveRows($conn);
     $finishedRows = fetchFinishedRows($conn);
 
@@ -788,7 +779,7 @@ function listData($conn)
         'stats' => buildStats($activeRows, $finishedRows),
         'active_rows' => $activeRows,
         'recent_finished_rows' => $finishedRows,
-        'filters' => buildFilterInfo($conn, $overridePrintServerUrl),
+        'filters' => buildFilterInfo($conn),
     ));
 }
 
@@ -797,7 +788,6 @@ function listActiveData($conn)
     if (!VOID_CONFIRM_MODE) {
         autoConfirmVoids($conn);
     }
-    $overridePrintServerUrl = requestString('print_server_url', '');
     $activeRows = fetchActiveRows($conn);
 
     jsonResponse(array(
@@ -805,265 +795,36 @@ function listActiveData($conn)
         'generated_at' => date('Y-m-d H:i:s'),
         'stats' => buildStats($activeRows, array()),
         'active_rows' => $activeRows,
-        'filters' => buildFilterInfo($conn, $overridePrintServerUrl),
+        'filters' => buildFilterInfo($conn),
     ));
 }
 
 function listFinishedData($conn)
 {
-    $overridePrintServerUrl = requestString('print_server_url', '');
     $finishedRows = fetchFinishedRows($conn);
 
     jsonResponse(array(
         'success' => true,
         'generated_at' => date('Y-m-d H:i:s'),
         'recent_finished_rows' => $finishedRows,
-        'filters' => buildFilterInfo($conn, $overridePrintServerUrl),
+        'filters' => buildFilterInfo($conn),
     ));
 }
 
-function buildFilterInfo($conn = null, $overridePrintServerUrl = '')
+function buildFilterInfo($conn = null)
 {
     $displayPrinters = array();
     if ($conn instanceof mysqli) {
         $displayPrinters = fetchAvailablePrinters($conn, getEffectiveComputerId());
     }
-    $normalizedPrintServerUrl = normalizePrintServerBaseUrl($overridePrintServerUrl);
-    $checkoutPrinters = resolveCheckoutPrinterOptions($conn, $normalizedPrintServerUrl);
 
     return array(
         'active_today_only' => (bool)ACTIVE_ROWS_TODAY_ONLY,
         'finished_today_only' => (bool)FINISHED_ROWS_TODAY_ONLY,
         'current_computer_id' => (int)CURRENT_COMPUTER_ID,
         'allowed_printer_ids' => array_values(array_map('intval', array_column($displayPrinters, 'printer_id'))),
-        'available_printers' => $checkoutPrinters,
         'display_printers' => $displayPrinters,
-        'default_checkout_printer_name' => (string)DEFAULT_CHECKOUT_PRINTER_NAME,
-        'allow_checkout_printer_selection' => (bool)ALLOW_CHECKOUT_PRINTER_SELECTION,
-        'checkout_print_provider' => (string)CHECKOUT_PRINT_PROVIDER,
-        'print_server_url' => $normalizedPrintServerUrl,
     );
-}
-
-function resolveCheckoutPrinterOptions($conn = null, $overridePrintServerUrl = '')
-{
-    $provider = defined('CHECKOUT_PRINT_PROVIDER') ? strtolower(trim((string)CHECKOUT_PRINT_PROVIDER)) : 'none';
-
-    if ($provider === 'print_server') {
-        return fetchPrintServerPrinters($overridePrintServerUrl, true);
-    }
-
-    if ($provider === 'queue' && $conn instanceof mysqli) {
-        return fetchAvailablePrinters($conn, getEffectiveComputerId());
-    }
-
-    return array();
-}
-
-function listPrintServerPrinters()
-{
-    $overridePrintServerUrl = requestString('print_server_url', '');
-    $normalizedPrintServerUrl = normalizePrintServerBaseUrl($overridePrintServerUrl);
-    $printers = fetchPrintServerPrinters($normalizedPrintServerUrl, false);
-
-    jsonResponse(array(
-        'success' => true,
-        'print_server_url' => $normalizedPrintServerUrl,
-        'printers' => $printers,
-    ));
-}
-
-function fetchPrintServerPrinters($overrideBase = '', $silent = true)
-{
-    static $cache = array();
-
-    $normalizedBase = normalizePrintServerBaseUrl($overrideBase);
-    if ($normalizedBase === '') {
-        return array();
-    }
-
-    $cacheKey = $normalizedBase;
-    if ($silent && isset($cache[$cacheKey])) {
-        return $cache[$cacheKey];
-    }
-
-    $printers = array();
-    $url = buildPrintServerEndpoint('printers', $normalizedBase);
-    if ($url === '') {
-        return $printers;
-    }
-
-    try {
-        $response = performJsonHttpRequest($url, 'GET');
-        $items = array();
-        if (isset($response['printers']) && is_array($response['printers'])) {
-            $items = $response['printers'];
-        } elseif (isset($response[0])) {
-            $items = $response;
-        }
-
-        foreach ($items as $item) {
-            $printerName = isset($item['printer_name']) ? trim((string)$item['printer_name']) : '';
-            if ($printerName === '' && isset($item['name'])) {
-                $printerName = trim((string)$item['name']);
-            }
-            if ($printerName === '') {
-                continue;
-            }
-
-            $printers[] = array(
-                'printer_name' => $printerName,
-                'printer_label' => isset($item['printer_label']) && trim((string)$item['printer_label']) !== ''
-                    ? trim((string)$item['printer_label'])
-                    : $printerName,
-                'is_default' => !empty($item['is_default']) ? 1 : 0,
-                'driver_name' => isset($item['driver_name']) ? trim((string)$item['driver_name']) : '',
-                'port_name' => isset($item['port_name']) ? trim((string)$item['port_name']) : '',
-                'source' => 'print_server',
-            );
-        }
-
-        $cache[$cacheKey] = $printers;
-    } catch (Throwable $e) {
-        if ($silent) {
-            $cache[$cacheKey] = array();
-            return array();
-        }
-        throw $e;
-    }
-
-    return $printers;
-}
-
-function normalizePrintServerBaseUrl($overrideBase = '')
-{
-    $base = trim((string)$overrideBase);
-    if ($base === '') {
-        $base = defined('PRINT_SERVER_URL') ? trim((string)PRINT_SERVER_URL) : '';
-    }
-    if ($base === '') {
-        return '';
-    }
-
-    if (!preg_match('#^https?://#i', $base)) {
-        $base = 'http://' . $base;
-    }
-
-    $parts = @parse_url($base);
-    if (!is_array($parts) || empty($parts['host'])) {
-        return $base;
-    }
-
-    $scheme = isset($parts['scheme']) ? strtolower((string)$parts['scheme']) : 'http';
-    $host = (string)$parts['host'];
-    $port = isset($parts['port']) ? (int)$parts['port'] : 0;
-    $path = isset($parts['path']) ? (string)$parts['path'] : '';
-    $query = isset($parts['query']) ? (string)$parts['query'] : '';
-
-    if ($path === '' || $path === '/') {
-        if ($port <= 0) {
-            $port = 5001;
-        }
-        $path = '/print_server.php';
-    }
-
-    $normalized = $scheme . '://' . $host;
-    if ($port > 0) {
-        $normalized .= ':' . $port;
-    }
-    $normalized .= $path;
-    if ($query !== '') {
-        $normalized .= '?' . $query;
-    }
-
-    return $normalized;
-}
-
-function buildPrintServerEndpoint($action, $overrideBase = '')
-{
-    $base = normalizePrintServerBaseUrl($overrideBase);
-    if ($base === '') {
-        return '';
-    }
-
-    $separator = (strpos($base, '?') === false) ? '?' : '&';
-    return $base . $separator . 'action=' . rawurlencode((string)$action);
-}
-
-function performJsonHttpRequest($url, $method, $payload = null)
-{
-    $method = strtoupper((string)$method);
-    $headers = array('Accept: application/json');
-    $token = defined('PRINT_SERVER_SHARED_TOKEN') ? trim((string)PRINT_SERVER_SHARED_TOKEN) : '';
-    if ($token !== '') {
-        $headers[] = 'X-Print-Server-Token: ' . $token;
-    }
-
-    $body = null;
-    if ($payload !== null) {
-        $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if ($body === false) {
-            throw new Exception('ไม่สามารถสร้าง JSON สำหรับ Print Server ได้');
-        }
-        $headers[] = 'Content-Type: application/json; charset=utf-8';
-    }
-
-    $timeout = defined('PRINT_SERVER_TIMEOUT_SECONDS') ? max(1, (int)PRINT_SERVER_TIMEOUT_SECONDS) : 2;
-    $responseBody = '';
-    $statusCode = 0;
-
-    if (function_exists('curl_init')) {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
-        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        if ($body !== null) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        }
-        $responseBody = curl_exec($ch);
-        if ($responseBody === false) {
-            $err = curl_error($ch);
-            curl_close($ch);
-            throw new Exception('ติดต่อ Print Server ไม่สำเร็จ: ' . $err);
-        }
-        $statusCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-    } else {
-        $context = stream_context_create(array(
-            'http' => array(
-                'method' => $method,
-                'header' => implode("\r\n", $headers),
-                'content' => $body !== null ? $body : '',
-                'timeout' => $timeout,
-                'ignore_errors' => true,
-            ),
-        ));
-        $responseBody = @file_get_contents($url, false, $context);
-        if ($responseBody === false) {
-            throw new Exception('ติดต่อ Print Server ไม่สำเร็จ');
-        }
-        // $http_response_header ถูก deprecated ใน PHP 8.4 — ใช้ http_get_last_response_headers() แทน
-        $__resHeaders = function_exists('http_get_last_response_headers')
-            ? http_get_last_response_headers()
-            : ($http_response_header ?? []);
-        if (isset($__resHeaders[0]) && preg_match('/\s(\d{3})\s/', $__resHeaders[0], $m)) {
-            $statusCode = (int)$m[1];
-        }
-    }
-
-    $data = json_decode((string)$responseBody, true);
-    if (!is_array($data)) {
-        throw new Exception('Print Server ส่งข้อมูลไม่ใช่ JSON');
-    }
-
-    if ($statusCode >= 400 || (isset($data['success']) && !$data['success'])) {
-        $message = isset($data['error']) ? (string)$data['error'] : ('Print Server ตอบกลับไม่สำเร็จ (' . $statusCode . ')');
-        throw new Exception($message);
-    }
-
-    return $data;
 }
 
 function fetchAvailablePrinters($conn, $computerId)
@@ -2237,83 +1998,6 @@ function undoOne($conn)
         $conn->rollback();
         throw $e;
     }
-}
-
-
-function resolveStatus($conn)
-{
-    $productLevelId = requestInt('ProductLevelID');
-    $processId = requestInt('ProcessID');
-    $subProcessId = requestInt('SubProcessID');
-    $printerId = requestInt('PrinterID');
-    $finishStaffId = requestInt('finish_staff_id', DEFAULT_FINISH_STAFF_ID);
-
-    $conn->begin_transaction();
-
-    try {
-        $row = fetchLockedProcessRow($conn, $productLevelId, $processId, $subProcessId, $printerId, array(PROCESS_STATUS_VOIDED));
-        if (!$row) {
-            throw new Exception('ไม่พบรายการยกเลิกที่ต้องการจบสถานะ');
-        }
-
-        $now = date('Y-m-d H:i:s');
-        resolveProcessRow($conn, $row, $finishStaffId, $now);
-
-        $childStatuses = array(PROCESS_STATUS_VOIDED, PROCESS_STATUS_ACTIVE, PROCESS_STATUS_IN_PROCESS);
-        $childRows = fetchLockedChildRows($conn, (int)$row['ProductLevelID'], (int)$row['ProcessID'], (int)$row['PrinterID'], $childStatuses);
-        foreach ($childRows as $childRow) {
-            resolveProcessRow($conn, $childRow, $finishStaffId, $now);
-        }
-
-        $conn->commit();
-
-        jsonResponse(array(
-            'success' => true,
-            'message' => 'จบสถานะรายการยกเลิกเรียบร้อย',
-            'refresh_finished' => false,
-        ));
-    } catch (Throwable $e) {
-        $conn->rollback();
-        throw $e;
-    }
-}
-
-function resolveProcessRow($conn, $row, $finishStaffId, $now)
-{
-    $resolvedStatus = (int)PROCESS_STATUS_RESOLVED;
-    $effectiveFinishStaffId = isset($row['FinishStaffID']) && (int)$row['FinishStaffID'] > 0
-        ? (int)$row['FinishStaffID']
-        : (int)$finishStaffId;
-    $effectiveFinishDateTime = isset($row['FinishDateTime']) && trim((string)$row['FinishDateTime']) !== ''
-        ? trim((string)$row['FinishDateTime'])
-        : $now;
-
-    $sql = "
-        UPDATE orderprocessdetailfront
-        SET FinishStaffID = ?,
-            FinishDateTime = ?,
-            ProcessStatus = ?
-        WHERE ProductLevelID = ?
-          AND ProcessID = ?
-          AND SubProcessID = ?
-          AND PrinterID = ?
-    ";
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        throw new Exception('Prepare failed: ' . $conn->error);
-    }
-
-    $productLevelId = (int)$row['ProductLevelID'];
-    $processId = (int)$row['ProcessID'];
-    $subProcessId = (int)$row['SubProcessID'];
-    $printerId = (int)$row['PrinterID'];
-    $stmt->bind_param('isiiiii', $effectiveFinishStaffId, $effectiveFinishDateTime, $resolvedStatus, $productLevelId, $processId, $subProcessId, $printerId);
-    $stmt->execute();
-    if ($stmt->affected_rows < 1) {
-        $stmt->close();
-        throw new Exception('ไม่สามารถจบสถานะรายการนี้ได้');
-    }
-    $stmt->close();
 }
 
 function fetchLockedProcessRow($conn, $productLevelId, $processId, $subProcessId, $printerId, $statuses)
