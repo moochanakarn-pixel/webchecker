@@ -2352,22 +2352,28 @@ function initSoundSettings() {
         function groupRowsByTable(rows) {
             const map = {};
             rows.forEach(function(row, idx) {
-                const tid = row.TableID !== null && row.TableID !== undefined ? Number(row.TableID) : 0;
-                const pid = Number(row.ProcessID || 0);
+                const tid  = row.TableID !== null && row.TableID !== undefined ? Number(row.TableID) : 0;
+                const pid  = Number(row.ProcessID || 0);
+                const smid = Number(row.SaleModeID || 0);
                 let key;
                 if (tid > 0) {
-                    key = 'tbl_' + tid;
-                } else if (pid > 0) {
-                    key = 'bill_' + pid;
+                    key = 'tbl_' + tid + '_' + smid;
                 } else {
-                    key = 'item_' + idx;
+                    const channel = (row.DisplayTableName || '').trim();
+                    if (channel) {
+                        key = 'd_' + channel + '_' + smid;
+                    } else if (pid > 0) {
+                        key = 'bill_' + pid;
+                    } else {
+                        key = 'item_' + idx;
+                    }
                 }
                 if (!map[key]) {
                     map[key] = {
                         tableId: tid,
                         tableName: row.DisplayTableName || (tid > 0 ? String(tid) : '-'),
-                        processId: pid,
                         saleModeName: row.SaleModeName || '',
+                        isDelivery: tid === 0,
                         rows: [],
                         earliest: row.SubmitOrderDateTime || ''
                     };
@@ -2417,7 +2423,7 @@ function initSoundSettings() {
                     ? `<div class="ct-item-parent">↳ ${escapeHtml(row.parent_name)}</div>` : '';
                 const setBadge = Number(row.ProductSetType) === 7 && Number(row.DisplayFlexibleAtChecker) === 1
                     ? '<span class="set-compact-badge" style="font-size:10px;padding:1px 5px">เซ็ท</span> ' : '';
-                const orderNum = state.showOrderNumber && row.ProcessID
+                const orderNum = (state.showOrderNumber || tbl.isDelivery) && row.ProcessID
                     ? `<span class="ct-item-ordnum">#${String(Number(row.ProcessID)).padStart(6,'0')}</span>` : '';
 
                 const productKey = String(row.ProductName || '').trim();
@@ -2474,10 +2480,11 @@ function initSoundSettings() {
             }).join('');
 
             const hasTable = tbl.tableId > 0;
-            const primaryLabel = hasTable ? 'โต๊ะ ' + escapeHtml(tbl.tableName) : escapeHtml(tbl.saleModeName || 'ออเดอร์');
+            const primaryLabel = hasTable
+                ? 'โต๊ะ ' + escapeHtml(tbl.tableName)
+                : escapeHtml(tbl.tableName !== '-' ? tbl.tableName : (tbl.saleModeName || 'ออเดอร์'));
             const subLineParts = [];
-            if (hasTable && tbl.saleModeName) subLineParts.push(escapeHtml(tbl.saleModeName));
-            if (!hasTable && tbl.processId > 0) subLineParts.push('#' + String(tbl.processId).padStart(6, '0'));
+            if (tbl.saleModeName) subLineParts.push(escapeHtml(tbl.saleModeName));
             subLineParts.push(subText);
             const subLine = subLineParts.join(' · ');
 
