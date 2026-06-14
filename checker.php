@@ -2371,7 +2371,7 @@ function initSoundSettings() {
                 if (!map[key]) {
                     map[key] = {
                         tableId: tid,
-                        tableName: row.DisplayTableName || (tid > 0 ? String(tid) : '-'),
+                        tableName: (row.DisplayTableName || '').trim() || (tid > 0 ? String(tid) : '-'),
                         saleModeName: row.SaleModeName || '',
                         isDelivery: tid === 0,
                         rows: [],
@@ -2642,7 +2642,8 @@ function initSoundSettings() {
                     ? `<div class="product-total-hint">รวมทั้งคิว ${formatQty(totalQtyForProduct)}</div>`
                     : '';
 
-                const orderNumField = state.showOrderNumber && row.ProcessID
+                const isDeliveryRow = Number(row.TableID || 0) === 0 && !!(row.DisplayTableName || '').trim();
+                const orderNumField = (state.showOrderNumber || isDeliveryRow) && row.ProcessID
                     ? `<div class="field"><div class="field-label">Order#</div><div class="field-value">${String(Number(row.ProcessID)).padStart(6, '0')}</div></div>`
                     : '';
 
