@@ -1228,10 +1228,28 @@ function mergeChildProcessRowsIntoParents($rows)
     $hiddenChildren  = array();
     $insertsByParent = array();
 
+    // Pass 1: merge comment rows (SetType 14/15) into their parent's comments[]
+    // Must run before pass 2 so that when a set-child (-6) becomes a card it carries its comments.
     foreach ($rows as $index => $row) {
         $parentProcessId = isset($row['ParentProcessID']) ? (int)$row['ParentProcessID'] : 0;
         $productSetType  = isset($row['ProductSetType'])  ? (int)$row['ProductSetType']  : 0;
 
+        if ($parentProcessId <= 0) continue;
+        if (!in_array($productSetType, array(14, 15), true)) continue;
+
+        $parentKey = makeParentLookupKey($row, $parentProcessId);
+        if (!isset($parentIndexMap[$parentKey])) continue;
+
+        $parentIndex = $parentIndexMap[$parentKey];
+        $rows[$parentIndex]['comments'] = appendProcessRowAsComment($rows[$parentIndex]['comments'], $row);
+        $hiddenChildren[$index] = true;
+    }
+
+    // Pass 2: handle set-children (-6) and flexible-set children
+    foreach ($rows as $index => $row) {
+        if (isset($hiddenChildren[$index])) continue;
+
+        $parentProcessId = isset($row['ParentProcessID']) ? (int)$row['ParentProcessID'] : 0;
         if ($parentProcessId <= 0) continue;
 
         $parentKey = makeParentLookupKey($row, $parentProcessId);
@@ -1240,18 +1258,15 @@ function mergeChildProcessRowsIntoParents($rows)
         $parentIndex = $parentIndexMap[$parentKey];
         $parentRow   = $rows[$parentIndex];
 
-        if (in_array($productSetType, array(14, 15), true)) {
-            // comment / เพิ่มราคา → merge เข้า comments[] ของ parent
-            $rows[$parentIndex]['comments'] = appendProcessRowAsComment($rows[$parentIndex]['comments'], $row);
-            $hiddenChildren[$index] = true;
-        } elseif ((int)($parentRow['DisplayFlexibleAtChecker'] ?? 0) === 1) {
+        if ((int)($parentRow['DisplayFlexibleAtChecker'] ?? 0) === 1) {
             // DisplayFlexibleAtChecker = 1 → โชว์แค่ parent row เดียว ซ่อน children ทั้งหมด
             $hiddenChildren[$index] = true;
         } else {
             // สินค้าชุด (SETA) → การ์ดแยกพร้อม parent_name + inherit status จาก parent
+            // ใช้ $rows[$index]['comments'] ซึ่งถูก populate ใน pass 1 แล้ว
             $newCard                        = $row;
             $newCard['parent_name']         = trim((string)(isset($parentRow['ProductName']) ? $parentRow['ProductName'] : ''));
-            $newCard['comments']            = array();
+            $newCard['comments']            = $rows[$index]['comments'];
             $newCard['TableID']             = $parentRow['TableID'];
             $newCard['DisplayTableName']    = $parentRow['DisplayTableName'];
             $newCard['OrderNo']             = $parentRow['OrderNo'];
