@@ -3243,6 +3243,14 @@ function initSoundSettings() {
                 .replace(/'/g, '&#039;');
         }
 
+        function escapeAttribute(value) {
+            return escapeHtml(value).replace(/`/g, '&#096;');
+        }
+
+        function jsEscape(value) {
+            return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+
         document.getElementById('refreshBtn').addEventListener('click', loadAll);
         const openSystemSettingsBtn = document.getElementById('openSystemSettingsBtn');
         if (openSystemSettingsBtn) {
