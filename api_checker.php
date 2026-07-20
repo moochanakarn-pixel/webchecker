@@ -1260,6 +1260,13 @@ function mergeChildProcessRowsIntoParents($rows)
 
         if ((int)($parentRow['DisplayFlexibleAtChecker'] ?? 0) === 1) {
             // DisplayFlexibleAtChecker = 1 → โชว์แค่ parent row เดียว ซ่อน children ทั้งหมด
+            // Roll up comments ที่ pass 1 populate ไว้บน flex-child ให้ parent ด้วย
+            if (!empty($rows[$index]['comments'])) {
+                $rows[$parentIndex]['comments'] = array_values(array_merge(
+                    $rows[$parentIndex]['comments'],
+                    $rows[$index]['comments']
+                ));
+            }
             $hiddenChildren[$index] = true;
         } else {
             // สินค้าชุด (SETA) → การ์ดแยกพร้อม parent_name + inherit status จาก parent
@@ -1286,7 +1293,9 @@ function mergeChildProcessRowsIntoParents($rows)
 
     $visibleRows = array();
     foreach ($rows as $index => $row) {
-        if (isset($hiddenChildren[$index])) continue;
+        // hiddenParents ต้องเช็คก่อน hiddenChildren เสมอ:
+        // row ที่เป็น type-14/15 (hiddenChildren) อาจเป็น parent ของ -6 child ด้วย
+        // ถ้าเช็ค hiddenChildren ก่อนจะ continue ทิ้ง insertsByParent โดยไม่ emit
         if (isset($hiddenParents[$index])) {
             if (isset($insertsByParent[$index])) {
                 foreach ($insertsByParent[$index] as $card) {
@@ -1295,6 +1304,7 @@ function mergeChildProcessRowsIntoParents($rows)
             }
             continue;
         }
+        if (isset($hiddenChildren[$index])) continue;
         $visibleRows[] = $row;
     }
 
