@@ -2373,7 +2373,7 @@ function initSoundSettings() {
                         tableId: tid,
                         tableName: (row.DisplayTableName || '').trim() || (tid > 0 ? String(tid) : '-'),
                         saleModeName: row.SaleModeName || '',
-                        isDelivery: tid === 0,
+                        isDelivery: tid === 0 && !!(row.DisplayTableName || '').trim(),
                         rows: [],
                         earliest: row.SubmitOrderDateTime || ''
                     };
@@ -2484,7 +2484,7 @@ function initSoundSettings() {
                 ? 'โต๊ะ ' + escapeHtml(tbl.tableName)
                 : escapeHtml(tbl.tableName !== '-' ? tbl.tableName : (tbl.saleModeName || 'ออเดอร์'));
             const subLineParts = [];
-            if (tbl.saleModeName) subLineParts.push(escapeHtml(tbl.saleModeName));
+            if (tbl.saleModeName && (hasTable || tbl.tableName !== '-')) subLineParts.push(escapeHtml(tbl.saleModeName));
             subLineParts.push(subText);
             const subLine = subLineParts.join(' · ');
 
