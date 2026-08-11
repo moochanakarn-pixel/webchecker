@@ -1003,7 +1003,9 @@ $_ckBase = _computeCheckerBase();
             lastCameraValue: '',
             lastScanAt: 0,       // throttle — timestamp ของ frame ล่าสุดที่ scan จริง
             awaitingFreshScan: true,
-            preferredFacingMode: 'user'
+            preferredFacingMode: 'user',
+            cameraOpening: false,        // guard: ป้องกัน concurrent openBarcodeCamera
+            cameraFacingSwitching: false  // guard: ป้องกัน concurrent switchBarcodeCameraFacing
         };
 
         // ค่าเวลาแจ้งเตือน (โหลดจาก localStorage)
@@ -1266,18 +1268,24 @@ $_ckBase = _computeCheckerBase();
         }
 
         async function switchBarcodeCameraFacing() {
-            const next = barcodeCaptureState.preferredFacingMode === 'environment' ? 'user' : 'environment';
-            savePreferredBarcodeFacingMode(next);
-            syncBarcodeCameraSwitchButton();
-            const status = document.getElementById('barcodeCameraStatus');
-            if (status) status.textContent = 'กำลังสลับเป็น' + getBarcodeFacingLabel(next) + '...';
-            if (state.barcodeCameraOpen) {
-                const shouldRefocus = document.activeElement !== document.getElementById('barcodeInput');
-                stopBarcodeCamera();
-                await openBarcodeCamera();
-                if (shouldRefocus) {
-                    focusBarcodeInput();
+            if (barcodeCaptureState.cameraFacingSwitching) return;
+            barcodeCaptureState.cameraFacingSwitching = true;
+            try {
+                const next = barcodeCaptureState.preferredFacingMode === 'environment' ? 'user' : 'environment';
+                savePreferredBarcodeFacingMode(next);
+                syncBarcodeCameraSwitchButton();
+                const status = document.getElementById('barcodeCameraStatus');
+                if (status) status.textContent = 'กำลังสลับเป็น' + getBarcodeFacingLabel(next) + '...';
+                if (state.barcodeCameraOpen) {
+                    const shouldRefocus = document.activeElement !== document.getElementById('barcodeInput');
+                    stopBarcodeCamera();
+                    await openBarcodeCamera();
+                    if (shouldRefocus) {
+                        focusBarcodeInput();
+                    }
                 }
+            } finally {
+                barcodeCaptureState.cameraFacingSwitching = false;
             }
         }
 
@@ -1320,7 +1328,10 @@ $_ckBase = _computeCheckerBase();
 
             const video = document.getElementById('barcodeCameraVideo');
             const status = document.getElementById('barcodeCameraStatus');
-            if (!video) return;
+            if (!video) {
+                barcodeCaptureState.cameraScanTimer = requestAnimationFrame(scanBarcodeFrame);
+                return;
+            }
 
             let foundValue = null;
 
@@ -1333,6 +1344,9 @@ $_ckBase = _computeCheckerBase();
                     }
                 } catch (e) {}
             }
+
+            // re-check หลัง await — stopBarcodeCamera อาจถูกเรียกขณะ detect() ค้างอยู่
+            if (!state.barcodeCameraOpen) return;
 
             // jsQR fallback สำหรับ QR code บนอุปกรณ์ที่ BarcodeDetector ไม่รองรับ QR
             if (!foundValue && typeof jsQR === 'function' && video.readyState === video.HAVE_ENOUGH_DATA) {
@@ -1367,16 +1381,20 @@ $_ckBase = _computeCheckerBase();
         }
 
         async function openBarcodeCamera() {
-            if (state.barcodeCameraOpen) return;
+            if (state.barcodeCameraOpen || barcodeCaptureState.cameraOpening) return;
+            barcodeCaptureState.cameraOpening = true;
             if (!getBarcodeCameraEnabled()) {
+                barcodeCaptureState.cameraOpening = false;
                 showNotice('ปิดปุ่มสแกนกล้องอยู่ในตั้งค่า', 'error');
                 return;
             }
             if (!barcodeMediaSupported) {
+                barcodeCaptureState.cameraOpening = false;
                 showNotice('อุปกรณ์นี้ไม่รองรับการเปิดกล้องจากหน้าเว็บ', 'error');
                 return;
             }
             if (!barcodeCameraSupported) {
+                barcodeCaptureState.cameraOpening = false;
                 showNotice('เบราว์เซอร์นี้ยังไม่รองรับการอ่านบาร์โค้ดจากกล้อง', 'error');
                 return;
             }
@@ -1419,10 +1437,12 @@ $_ckBase = _computeCheckerBase();
                 if (backdrop) backdrop.classList.add('open');
                 if (modal) modal.classList.add('open');
                 state.barcodeCameraOpen = true;
+                barcodeCaptureState.cameraOpening = false;
                 syncBarcodeCameraSwitchButton();
                 if (status) status.textContent = getBarcodeFacingLabel(barcodeCaptureState.preferredFacingMode) + 'พร้อมแล้ว หันไปที่บาร์โค้ดเพื่อเช็คเอาต์อัตโนมัติ';
                 scanBarcodeFrame();
             } catch (error) {
+                barcodeCaptureState.cameraOpening = false;
                 stopBarcodeCamera();
                 const msg = (error && error.name === 'NotAllowedError')
                     ? 'ยังไม่ได้อนุญาตให้ใช้กล้อง'
