@@ -1654,15 +1654,17 @@ function autoConfirmVoids($conn)
     $safeIds = implode(', ', array_map('intval', $allowedPrinterIds));
     $voidedStatus    = (int)PROCESS_STATUS_VOIDED;
     $confirmedStatus = (int)PROCESS_STATUS_VOID_CONFIRMED;
-    $now = date('Y-m-d H:i:s');
+    $now     = date('Y-m-d H:i:s');
+    $today   = date('Y-m-d');
 
     $sql = "UPDATE orderprocessdetailfront
                SET ProcessStatus = ?, FinishDateTime = ?
              WHERE ProcessStatus = ?
+               AND OrderDate = ?
                AND PrinterID IN ({$safeIds})";
     $stmt = $conn->prepare($sql);
     if (!$stmt) return;
-    $stmt->bind_param('isi', $confirmedStatus, $now, $voidedStatus);
+    $stmt->bind_param('isss', $confirmedStatus, $now, $voidedStatus, $today);
     $stmt->execute();
     $stmt->close();
 }

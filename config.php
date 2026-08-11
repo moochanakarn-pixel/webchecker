@@ -211,7 +211,7 @@ function jsonResponse($payload, $statusCode = 200)
     $body = json_encode($payload, $flags);
     if ($body === false) {
         $body = '{"success":false,"error":"json encode error"}';
-        $statusCode = 500;
+        $statusCode = 200; // ไม่ใช้ 5xx — IIS จะดักและแทนที่ body ด้วย HTML error page
     }
     while (ob_get_level()) ob_end_clean();
     http_response_code($statusCode);

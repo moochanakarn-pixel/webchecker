@@ -933,7 +933,9 @@ $_ckBase = _computeCheckerBase();
         const thresholdYellowDefault = <?php echo defined('ALERT_THRESHOLD_YELLOW_DEFAULT') ? (int)ALERT_THRESHOLD_YELLOW_DEFAULT : 10; ?>;
         const thresholdRedDefault = <?php echo defined('ALERT_THRESHOLD_RED_DEFAULT') ? (int)ALERT_THRESHOLD_RED_DEFAULT : 20; ?>;
         const barcodeMediaSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-        const barcodeCameraSupported = !!(barcodeMediaSupported && (window.BarcodeDetector || typeof jsQR === 'function'));
+        // jsQR decode ได้เฉพาะ QR code ไม่รองรับ Code-128/EAN-13/UPC บนใบออเดอร์
+        // → ต้องการ BarcodeDetector จริงๆ จึงจะเปิดปุ่มกล้อง; jsQR ยังทำงานเป็น secondary path ใน scanBarcodeFrame
+        const barcodeCameraSupported = !!(window.BarcodeDetector && barcodeMediaSupported);
         var outOfStockControlEnabled = <?php echo defined('ENABLE_OUT_OF_STOCK_CONTROL') && ENABLE_OUT_OF_STOCK_CONTROL ? 'true' : 'false'; ?>;
 
         let isSubmitting = false;
@@ -1406,9 +1408,7 @@ $_ckBase = _computeCheckerBase();
             try {
                 clearBarcodeInput();
                 barcodeCaptureState.lastCameraValue = '';
-                barcodeCaptureState.cameraDetector = window.BarcodeDetector
-                    ? new BarcodeDetector({ formats: ['code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'codabar', 'qr_code'] })
-                    : null;
+                barcodeCaptureState.cameraDetector = new BarcodeDetector({ formats: ['code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'codabar', 'qr_code'] });
                 const preferredFacingMode = barcodeCaptureState.preferredFacingMode === 'environment' ? 'environment' : 'user';
                 let stream = null;
                 try {
@@ -2949,6 +2949,10 @@ function initSoundSettings() {
                 closeCheckoutQtyPopup(null);
             } else if (t.id === 'checkoutQtyConfirmBtn') {
                 closeCheckoutQtyPopup(_checkoutQtyCurrent);
+            } else if (t.id === 'checkoutQtyBackdrop') {
+                // คลิก backdrop นอก modal → ยกเลิก popup และ reset isSubmitting
+                closeCheckoutQtyPopup(null);
+                isSubmitting = false;
             }
         });
 
@@ -3445,6 +3449,12 @@ function initSoundSettings() {
         document.addEventListener('keydown', function(event) {
             if (event.key === 'Escape') {
                 if (state.barcodeCameraOpen) { stopBarcodeCamera(); focusBarcodeInput(); return; }
+                const qtyBackdrop = document.getElementById('checkoutQtyBackdrop');
+                if (qtyBackdrop && qtyBackdrop.style.display === 'flex') {
+                    closeCheckoutQtyPopup(null);
+                    isSubmitting = false;
+                    return;
+                }
                 if (state.timerSettingsOpen) { closeTimerSettings(); focusBarcodeInput(); return; }
                 if (state.finishedDrawerOpen) { closeFinishedDrawer(); focusBarcodeInput(); }
                 return;
