@@ -1306,6 +1306,7 @@ $_ckBase = _computeCheckerBase();
             const status = document.getElementById('barcodeCameraStatus');
             if (status) status.textContent = 'กดเปิด' + getBarcodeFacingLabel(barcodeCaptureState.preferredFacingMode) + 'แล้วหันไปที่บาร์โค้ดบนใบออเดอร์';
             barcodeCaptureState.lastCameraValue = '';
+            barcodeCaptureState.lastScanAt = 0;
             syncBarcodeCameraSwitchButton();
             state.barcodeCameraOpen = false;
             const backdrop = document.getElementById('barcodeCameraBackdrop');
@@ -3112,6 +3113,9 @@ function initSoundSettings() {
                 focusBarcodeInput();
             } catch (error) {
                 setStatusText('เกิดข้อผิดพลาด');
+                // reset duplicate guard — ให้ผู้ใช้ scan ซ้ำได้ทันทีหลัง error
+                _lastScanCode = '';
+                _lastScanTime = 0;
                 clearBarcodeInput();
                 feedbackError();
                 showNotice(error.message || 'Barcode not found', 'error');
