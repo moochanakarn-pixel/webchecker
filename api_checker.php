@@ -1261,11 +1261,20 @@ function mergeChildProcessRowsIntoParents($rows)
         if ((int)($parentRow['DisplayFlexibleAtChecker'] ?? 0) === 1) {
             // DisplayFlexibleAtChecker = 1 → โชว์แค่ parent row เดียว ซ่อน children ทั้งหมด
             // Roll up comments ที่ pass 1 populate ไว้บน flex-child ให้ parent ด้วย
+            // ใช้ dedup เพื่อป้องกัน pre-fetch ที่ copy comments ของ parent ลง child ไว้แล้ว
             if (!empty($rows[$index]['comments'])) {
-                $rows[$parentIndex]['comments'] = array_values(array_merge(
-                    $rows[$parentIndex]['comments'],
-                    $rows[$index]['comments']
-                ));
+                $seen = array();
+                foreach ($rows[$parentIndex]['comments'] as $c) {
+                    $seen[(int)($c['type'] ?? 0) . '|' . trim((string)($c['text'] ?? '')) . '|' . toDecimalString((float)($c['amount'] ?? 0), 2)] = true;
+                }
+                foreach ($rows[$index]['comments'] as $c) {
+                    $key = (int)($c['type'] ?? 0) . '|' . trim((string)($c['text'] ?? '')) . '|' . toDecimalString((float)($c['amount'] ?? 0), 2);
+                    if (!isset($seen[$key])) {
+                        $seen[$key] = true;
+                        $rows[$parentIndex]['comments'][] = $c;
+                    }
+                }
+                $rows[$parentIndex]['comments'] = array_values($rows[$parentIndex]['comments']);
             }
             $hiddenChildren[$index] = true;
         } else {
