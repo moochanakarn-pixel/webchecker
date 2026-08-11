@@ -933,7 +933,7 @@ $_ckBase = _computeCheckerBase();
         const thresholdYellowDefault = <?php echo defined('ALERT_THRESHOLD_YELLOW_DEFAULT') ? (int)ALERT_THRESHOLD_YELLOW_DEFAULT : 10; ?>;
         const thresholdRedDefault = <?php echo defined('ALERT_THRESHOLD_RED_DEFAULT') ? (int)ALERT_THRESHOLD_RED_DEFAULT : 20; ?>;
         const barcodeMediaSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-        const barcodeCameraSupported = !!(window.BarcodeDetector && barcodeMediaSupported);
+        const barcodeCameraSupported = !!(barcodeMediaSupported && (window.BarcodeDetector || typeof jsQR === 'function'));
         var outOfStockControlEnabled = <?php echo defined('ENABLE_OUT_OF_STOCK_CONTROL') && ENABLE_OUT_OF_STOCK_CONTROL ? 'true' : 'false'; ?>;
 
         let isSubmitting = false;
@@ -1405,7 +1405,9 @@ $_ckBase = _computeCheckerBase();
             try {
                 clearBarcodeInput();
                 barcodeCaptureState.lastCameraValue = '';
-                barcodeCaptureState.cameraDetector = new BarcodeDetector({ formats: ['code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'codabar', 'qr_code'] });
+                barcodeCaptureState.cameraDetector = window.BarcodeDetector
+                    ? new BarcodeDetector({ formats: ['code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'codabar', 'qr_code'] })
+                    : null;
                 const preferredFacingMode = barcodeCaptureState.preferredFacingMode === 'environment' ? 'environment' : 'user';
                 let stream = null;
                 try {
@@ -1419,12 +1421,9 @@ $_ckBase = _computeCheckerBase();
                     });
                 } catch (primaryError) {
                     const fallbackFacingMode = preferredFacingMode === 'environment' ? 'user' : 'environment';
+                    // fallback: ไม่ระบุ resolution เพื่อหลีกเลี่ยง OverconstrainedError
                     stream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            facingMode: { ideal: fallbackFacingMode },
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
-                        },
+                        video: { facingMode: { ideal: fallbackFacingMode } },
                         audio: false
                     });
                     savePreferredBarcodeFacingMode(fallbackFacingMode);
@@ -1444,9 +1443,14 @@ $_ckBase = _computeCheckerBase();
             } catch (error) {
                 barcodeCaptureState.cameraOpening = false;
                 stopBarcodeCamera();
-                const msg = (error && error.name === 'NotAllowedError')
+                const errName = (error && error.name) || '';
+                const msg = (errName === 'NotAllowedError' || errName === 'PermissionDeniedError')
                     ? 'ยังไม่ได้อนุญาตให้ใช้กล้อง'
-                    : 'ไม่สามารถเปิดกล้องได้';
+                    : (errName === 'NotFoundError' || errName === 'DevicesNotFoundError')
+                        ? 'ไม่พบกล้องบนอุปกรณ์นี้'
+                        : (errName === 'NotReadableError' || errName === 'TrackStartError')
+                            ? 'กล้องถูกใช้งานโดยโปรแกรมอื่นอยู่'
+                            : 'ไม่สามารถเปิดกล้องได้';
                 showNotice(msg, 'error');
             }
         }
@@ -3450,6 +3454,11 @@ function initSoundSettings() {
 
             if (/^[0-9A-Za-z\-]$/.test(event.key)) {
                 if (targetIsBarcode) {
+                    // มือถือ: input เป็น readonly → input event ไม่ fire → route ผ่าน buffer แทน
+                    if (target.readOnly) {
+                        queueGlobalBarcodeDigit(event.key);
+                        event.preventDefault();
+                    }
                     return;
                 }
                 queueGlobalBarcodeDigit(event.key);
@@ -3535,6 +3544,11 @@ function initSoundSettings() {
                 applyTableViewEnabled(Number(d.settings.table_view_enabled || 0) === 1);
                 state.checkoutQtyMode = Number(d.settings.checkout_qty_mode || 1);
                 state.showOrderNumber = Number(d.settings.show_order_number || 0) === 1;
+                // sync barcode_camera_enabled จาก server → localStorage ถ้ายังไม่มีค่า (เช่น browser ใหม่/incognito)
+                if (localStorage.getItem(getBarcodeCameraEnabledStorageKey()) === null) {
+                    saveBarcodeCameraEnabled(Number(d.settings.barcode_camera_enabled || 0) === 1);
+                    applyBarcodeCameraAvailability();
+                }
                 var dbOk = (d.connection_message === 'เชื่อมต่อฐานข้อมูลปัจจุบันได้');
                 if (!dbOk) { showDbErrorState(d.connection_message); return; }
                 // DB OK — restore staff แล้วโหลดข้อมูล
