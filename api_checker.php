@@ -1194,9 +1194,12 @@ function attachCommentsToRows($conn, $rows)
         $processId = isset($row['ProcessID']) ? (int)$row['ProcessID'] : 0;
         $parentProcessId = isset($row['ParentProcessID']) ? (int)$row['ParentProcessID'] : 0;
 
+        $productSetType = isset($row['ProductSetType']) ? (int)$row['ProductSetType'] : 0;
         if ($processId > 0 && isset($commentsMap[$processId])) {
             $row['comments'] = array_values($commentsMap[$processId]);
-        } elseif ($parentProcessId > 0 && isset($commentsMap[$parentProcessId])) {
+        } elseif ($parentProcessId > 0 && isset($commentsMap[$parentProcessId]) && $productSetType !== -6) {
+            // -6 (SETA child) แสดงเป็น card แยก ไม่ inherit comment ของ parent
+            // flex-child (-6 + DisplayFlexibleAtChecker=1) ถูกซ่อนอยู่แล้ว ก็ OK ที่จะ inherit
             $row['comments'] = array_values($commentsMap[$parentProcessId]);
         } else {
             $row['comments'] = array();

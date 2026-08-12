@@ -2448,7 +2448,7 @@ function initSoundSettings() {
                     ? `<div class="ct-item-parent">↳ ${escapeHtml(row.parent_name)}</div>` : '';
                 const setBadge = Number(row.ProductSetType) === 7 && Number(row.DisplayFlexibleAtChecker) === 1
                     ? '<span class="set-compact-badge" style="font-size:10px;padding:1px 5px">เซ็ท</span> ' : '';
-                const orderNum = (state.showOrderNumber || tbl.isDelivery) && row.ProcessID
+                const orderNum = (state.showOrderNumber || tbl.tableId === 0) && row.ProcessID
                     ? `<span class="ct-item-ordnum">#${String(Number(row.ProcessID)).padStart(6,'0')}</span>` : '';
 
                 const productKey = String(row.ProductName || '').trim();
@@ -2667,8 +2667,7 @@ function initSoundSettings() {
                     ? `<div class="product-total-hint">รวมทั้งคิว ${formatQty(totalQtyForProduct)}</div>`
                     : '';
 
-                const isDeliveryRow = Number(row.TableID || 0) === 0 && !!(row.DisplayTableName || '').trim();
-                const orderNumField = (state.showOrderNumber || isDeliveryRow) && row.ProcessID
+                const orderNumField = (state.showOrderNumber || Number(row.TableID || 0) === 0) && row.ProcessID
                     ? `<div class="field"><div class="field-label">Order#</div><div class="field-value">${String(Number(row.ProcessID)).padStart(6, '0')}</div></div>`
                     : '';
 
@@ -3280,7 +3279,9 @@ function initSoundSettings() {
         }
 
         function jsEscape(value) {
-            return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+                .replace(/\r/g, '\\r').replace(/\n/g, '\\n')
+                .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
         }
 
         document.getElementById('refreshBtn').addEventListener('click', loadAll);
@@ -3587,21 +3588,37 @@ function initSoundSettings() {
 
         kdsStartupCheck();
 
-        setInterval(function() {
-            if (isSubmitting) return;
-            activeRefreshTick += 1;
-            try {
-                loadActiveRows();
-                if (state.finishedDrawerOpen || activeRefreshTick % finishedRefreshEvery === 0) {
-                    loadFinishedRows();
+        var _refreshIntervalId = null;
+        function startRefreshInterval() {
+            if (_refreshIntervalId) return;
+            _refreshIntervalId = setInterval(function() {
+                if (isSubmitting) return;
+                activeRefreshTick += 1;
+                try {
+                    loadActiveRows();
+                    if (state.finishedDrawerOpen || activeRefreshTick % finishedRefreshEvery === 0) {
+                        loadFinishedRows();
+                    }
+                    if (window._kdsGetCurrentZoneId && window._kdsGetCurrentZoneId() > 0 && activeRefreshTick % 4 === 0) {
+                        window._kdsFilterCardsByZone(window._kdsGetCurrentZoneId());
+                    }
+                } catch (e) {
+                    console.warn('auto-refresh error', e);
                 }
-                if (window._kdsGetCurrentZoneId && window._kdsGetCurrentZoneId() > 0 && activeRefreshTick % 4 === 0) {
-                    window._kdsFilterCardsByZone(window._kdsGetCurrentZoneId());
-                }
-            } catch (e) {
-                console.warn('auto-refresh error', e);
+            }, refreshMs);
+        }
+        function stopRefreshInterval() {
+            if (_refreshIntervalId) { clearInterval(_refreshIntervalId); _refreshIntervalId = null; }
+        }
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                stopRefreshInterval();
+            } else {
+                loadAll();
+                startRefreshInterval();
             }
-        }, refreshMs);
+        });
+        startRefreshInterval();
     </script>
 
     <script>
@@ -3738,6 +3755,18 @@ function initSoundSettings() {
                 });
                 card.style.display = anyVisible ? '' : 'none';
             });
+            // อัปเดต queueSummary ให้ตรงกับจำนวน card ที่มองเห็นจริงหลัง filter
+            var summaryEl = document.getElementById('queueSummary');
+            if (summaryEl) {
+                var visibleList  = document.querySelectorAll('article[data-table-id]:not(.card-table):not([style*="display: none"]):not([style*="display:none"])').length;
+                var visibleTable = document.querySelectorAll('article.card-table:not([style*="display: none"]):not([style*="display:none"])').length;
+                var visible = visibleList + visibleTable;
+                if (visible > 0) {
+                    summaryEl.textContent = 'ค้าง ' + visible + (visibleTable > 0 && visibleList === 0 ? ' การ์ด' : ' แถว');
+                } else {
+                    summaryEl.textContent = 'ไม่มีคิวค้าง';
+                }
+            }
         }
     window.applyOutOfStockEnabled = function(enabled) {
         outOfStockControlEnabled = !!enabled;
