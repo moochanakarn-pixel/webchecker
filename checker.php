@@ -1007,7 +1007,8 @@ $_ckBase = _computeCheckerBase();
             awaitingFreshScan: true,
             preferredFacingMode: 'user',
             cameraOpening: false,        // guard: ป้องกัน concurrent openBarcodeCamera
-            cameraFacingSwitching: false  // guard: ป้องกัน concurrent switchBarcodeCameraFacing
+            cameraFacingSwitching: false, // guard: ป้องกัน concurrent switchBarcodeCameraFacing
+            cameraGeneration: 0          // เพิ่มทุกครั้งที่เปิด/ปิดกล้อง ให้ scanBarcodeFrame ที่ค้างรู้ว่าตัวเองล้าสมัย
         };
 
         // ค่าเวลาแจ้งเตือน (โหลดจาก localStorage)
@@ -1309,6 +1310,7 @@ $_ckBase = _computeCheckerBase();
             if (status) status.textContent = 'กดเปิด' + getBarcodeFacingLabel(barcodeCaptureState.preferredFacingMode) + 'แล้วหันไปที่บาร์โค้ดบนใบออเดอร์';
             barcodeCaptureState.lastCameraValue = '';
             barcodeCaptureState.lastScanAt = 0;
+            barcodeCaptureState.cameraGeneration++;  // invalidate in-flight scanBarcodeFrame
             syncBarcodeCameraSwitchButton();
             state.barcodeCameraOpen = false;
             const backdrop = document.getElementById('barcodeCameraBackdrop');
@@ -1320,6 +1322,7 @@ $_ckBase = _computeCheckerBase();
 
         async function scanBarcodeFrame() {
             if (!state.barcodeCameraOpen) return;
+            const myGeneration = barcodeCaptureState.cameraGeneration;
 
             const now = Date.now();
             // throttle: scan จริงทุก 200ms เท่านั้น ไม่ต้องทุก frame (60fps → ~5fps)
@@ -1348,8 +1351,8 @@ $_ckBase = _computeCheckerBase();
                 } catch (e) {}
             }
 
-            // re-check หลัง await — stopBarcodeCamera อาจถูกเรียกขณะ detect() ค้างอยู่
-            if (!state.barcodeCameraOpen) return;
+            // re-check หลัง await — stopBarcodeCamera / openBarcodeCamera อาจถูกเรียกขณะ detect() ค้างอยู่
+            if (!state.barcodeCameraOpen || barcodeCaptureState.cameraGeneration !== myGeneration) return;
 
             // jsQR fallback สำหรับ QR code บนอุปกรณ์ที่ BarcodeDetector ไม่รองรับ QR
             if (!foundValue && typeof jsQR === 'function' && video.readyState === video.HAVE_ENOUGH_DATA) {
@@ -1380,6 +1383,7 @@ $_ckBase = _computeCheckerBase();
                 }, 1500);
             }
 
+            if (barcodeCaptureState.cameraGeneration !== myGeneration) return;
             barcodeCaptureState.cameraScanTimer = requestAnimationFrame(scanBarcodeFrame);
         }
 
@@ -1437,6 +1441,7 @@ $_ckBase = _computeCheckerBase();
                 if (backdrop) backdrop.classList.add('open');
                 if (modal) modal.classList.add('open');
                 state.barcodeCameraOpen = true;
+                barcodeCaptureState.cameraGeneration++;  // ให้ scan loop รุ่นนี้รู้ว่าตัวเองเป็น generation ล่าสุด
                 barcodeCaptureState.cameraOpening = false;
                 syncBarcodeCameraSwitchButton();
                 if (status) status.textContent = getBarcodeFacingLabel(barcodeCaptureState.preferredFacingMode) + 'พร้อมแล้ว หันไปที่บาร์โค้ดเพื่อเช็คเอาต์อัตโนมัติ';
