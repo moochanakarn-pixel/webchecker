@@ -110,8 +110,15 @@ return [
 
 | ความเสี่ยง | รายการ |
 |---|---|
+| 🔴 สูง | `settings.local.php` มี DB credentials ใน git history — ต้องเปลี่ยน password + `git filter-repo` |
+| 🟡 กลาง | List-view ซ่อน Takeaway/Delivery เมื่อเปิด Zone filter (`applyZoneFilterSync` ขาด `tid === 0` exemption) |
+| 🟡 กลาง | `closeCheckoutQtyPopup` setTimeout 200ms race — เปิด popup ใหม่เร็วเกิน 200ms → popup ถูกซ่อนทันที |
+| 🟡 กลาง | `syncDrawerState` ล้าง `drawer-open` โดยไม่สนใจ overlay อื่น → page scroll ทะลุ settings modal |
+| 🟡 กลาง | Zone/Salemode modal ไม่ล็อค body scroll |
 | 🟡 ต่ำ | Screen lock kick ช้า ~8 วินาที |
 | 🟡 ต่ำ | Undo state อาจไม่ sync กับ DB ในบางกรณี |
+| 🟡 ต่ำ | Staff code debounce 500ms — พิมพ์แล้ว save เร็วเกิน → บันทึกรหัสเดิม |
+| 🟡 ต่ำ | Zone/Salemode filter ส่ง array เป็น string `'1,2,3'` แทน `ids[]=1&ids[]=2` |
 
 ---
 
@@ -123,6 +130,47 @@ return [
 ---
 
 # Patch Notes
+
+## v1.11.1 — 2026-08-20
+
+### 🐛 Bug Fixes
+
+#### กล้องสแกน (Camera / BarcodeDetector)
+
+- **[Camera] Scan loop ซ้อนหลัง restart เร็ว** — เพิ่ม `cameraGeneration` counter ใน `barcodeCaptureState`; `stopBarcodeCamera` และ `openBarcodeCamera` แต่ละตัว increment counter, `scanBarcodeFrame` capture generation ตอน entry และ bail-out ทันทีหลัง `await detect()` ถ้า generation เปลี่ยน — ป้องกัน rAF loop เก่าที่ค้างระหว่าง await วนซ้ำซ้อนกับ loop ใหม่
+- **[Camera] Concurrent `openBarcodeCamera` race** — เพิ่ม `cameraOpening` flag; reset ทุก early-return path รวมถึงตอนที่ `getBarcodeCameraEnabled / barcodeMediaSupported / barcodeCameraSupported` ไม่ผ่าน
+- **[Camera] Concurrent `switchBarcodeCameraFacing` race** — เพิ่ม `cameraFacingSwitching` flag, wrap try/finally ป้องกันกด switch หลายครั้งพร้อมกัน
+- **[Camera] `lastScanAt` ไม่ reset ตอนปิดกล้อง** — เพิ่ม `barcodeCaptureState.lastScanAt = 0` ใน `stopBarcodeCamera`; ป้องกัน throttle ค้างเมื่อเปิดกล้องใหม่
+- **[Camera] OverconstrainedError ตอน getUserMedia fallback** — ลบ `width/height` constraints ออกจาก fallback branch
+- **[Camera] Error message ไม่แยก type** — แยก `NotAllowedError / NotFoundError / NotReadableError / TrackStartError` ด้วย `error.name` แทนการแสดง generic message
+- **[Camera] `scanBarcodeFrame` silent die เมื่อไม่มี video element** — เปลี่ยน branch ไม่เจอ `<video>` จาก early-return เป็นสั่ง rAF ต่อ (ป้องกัน loop หยุด)
+- **[Camera] `barcodeCameraSupported` ใช้ jsQR เป็น fallback** — แก้เป็น `!!(window.BarcodeDetector && barcodeMediaSupported)`; jsQR decode ได้แค่ QR ไม่ใช่ Code-128/EAN-13 ที่ใช้จริงในร้าน
+
+#### Barcode / Checkout
+
+- **[Barcode] Bluetooth scanner บน mobile ไม่ผ่าน** — keydown handler route ตัวเลขผ่าน `queueGlobalBarcodeDigit` เมื่อ barcodeInput เป็น readonly (แก้กรณี focus ตก input อื่น)
+- **[Barcode] _lastScanCode ไม่ reset หลัง error** — `catch` ของ `checkoutBarcode` reset `_lastScanCode = ''; _lastScanTime = 0` ให้ user scan ซ้ำได้ทันทีหลัง error
+- **[Checkout] `isSubmitting` ค้างเมื่อปิด qty popup ด้วย Escape** — Escape handler ปิด `checkoutQtyBackdrop` และ reset `isSubmitting = false`
+- **[Checkout] `isSubmitting` ค้างเมื่อคลิก backdrop** — backdrop click handler ปิด popup และ reset `isSubmitting = false`
+
+#### API / Backend
+
+- **[API] `jsonResponse()` fallback return HTTP 500** — เปลี่ยนเป็น 200; IIS จะดักและแทนที่ body ด้วย HTML error page ถ้าเป็น 5xx
+- **[API] `autoConfirmVoids()` ไม่ filter วันนี้** — เพิ่ม `AND OrderDate = ?` bind param `date('Y-m-d')`; ป้องกัน auto-confirm order เก่าข้ามวัน
+- **[API] SET child (-6) รับ comment ของ parent** — pre-fetch loop block `elseif ($parentProcessId > 0 && ...)` สำหรับ `ProductSetType === -6` แยก comment ไม่ให้แชร์
+- **[API] Flex-child comment rollup ซ้ำกัน** — `mergeChildProcessRowsIntoParents` dedup ด้วย key `type|text|amount` (ใช้ `toDecimalString()`) ก่อน append
+
+#### UI / Display
+
+- **[UI] `applyZoneFilterSync` ไม่อัป queueSummary** — เพิ่ม queueSummary update หลัง filter เพื่อแสดง count ที่ visible จริง
+- **[UI] `jsEscape()` ไม่ escape line separators** — เพิ่ม `\r`, `\n`, ` `, ` ` ป้องกัน JS syntax error ใน inline template literal
+- **[UI] `kdsStartupCheck` ไม่ seed localStorage จาก server** — ถ้า localStorage เป็น null จะ seed จาก server value ก่อน
+
+#### Performance
+
+- **[Perf] `setInterval` ทำงานต่อเมื่อ tab hidden** — refactor เป็น `startRefreshInterval() / stopRefreshInterval()` + `visibilitychange` listener หยุด polling เมื่อ tab อยู่ background
+
+---
 
 ## v1.11.0 — 2026-05-21
 
